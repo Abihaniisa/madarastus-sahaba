@@ -1,9 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ============================================
-// CENTRALIZED CONFIGURATION
-// ============================================
-
 export const SCHOOL = {
   name: 'Madrasatus Sahaba Litahfizul Quran',
   shortName: 'Madrasatus Sahaba',
@@ -16,7 +12,7 @@ export const FOUNDER = {
   name: 'Sheikh Abdullahi Babayo',
   title: 'Founder & Spiritual Guide',
   history:
-    'Sheikh Abdullahi Babayo is a devoted scholar and educator who has dedicated his life to the teaching of the Quran and Islamic knowledge. With a vision to nurture the next generation of Huffaz, he established Madrasatus Sahaba Litahfizul Quran to provide authentic, structured, and accessible Quranic education to students from all backgrounds.',
+    'Sheikh Abdullahi Babayo is a devoted scholar and educator who has dedicated his life to the teaching of the Quran and Islamic knowledge. He established Madrasatus Sahaba Litahfizul Quran to provide authentic, structured, and accessible Quranic education to students from all backgrounds.',
 };
 
 export const STATUS_LABELS: Record<string, { label: string; emoji: string }> = {
@@ -24,10 +20,6 @@ export const STATUS_LABELS: Record<string, { label: string; emoji: string }> = {
   M: { label: 'Makeup', emoji: '🔄' },
   X: { label: 'Pending', emoji: '⏳' },
 };
-
-// ============================================
-// TYPES
-// ============================================
 
 export type RecitationStatus = 'R' | 'M' | 'X';
 
@@ -61,27 +53,12 @@ export interface Achievement {
   created_at: string;
 }
 
-// ============================================
-// SUPABASE CLIENTS
-// ============================================
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-  : supabase;
-
-// ============================================
-// CALCULATIONS
-// ============================================
-
-const SCHOOL_START = '2026-07-13';
+export const SCHOOL_START = '2026-07-13';
 
 export function getSchoolWeek(dateStr: string): number {
   const start = new Date(SCHOOL_START + 'T00:00:00Z');
@@ -89,6 +66,12 @@ export function getSchoolWeek(dateStr: string): number {
   const diffDays = Math.floor((date.getTime() - start.getTime()) / 86400000);
   if (diffDays < 0) return 0;
   return Math.floor(diffDays / 7) + 1;
+}
+
+export function isRecitationDay(dateStr: string): boolean {
+  const date = new Date(dateStr + 'T00:00:00Z');
+  const day = date.getUTCDay();
+  return day >= 1 && day <= 4;
 }
 
 export function deduplicate(records: AttendanceRecord[]): AttendanceRecord[] {
@@ -108,7 +91,6 @@ export function getApplicable(records: AttendanceRecord[], student: Student): At
   const deduped = deduplicate(records);
   const today = new Date().toISOString().slice(0, 10);
   const notFuture = deduped.filter((r) => r.date <= today);
-
   if (student.joining_date !== null) {
     return notFuture.filter((r) => r.date >= student.joining_date!);
   }
@@ -120,35 +102,39 @@ export function getApplicable(records: AttendanceRecord[], student: Student): At
 
 export function calculateStats(records: AttendanceRecord[], student: Student) {
   const applicable = getApplicable(records, student);
-  let r = 0, m = 0, x = 0;
-
+  let r = 0;
+  let m = 0;
+  let x = 0;
   for (const rec of applicable) {
     if (rec.status === 'R') r++;
     else if (rec.status === 'M') m++;
     else x++;
   }
-
   const total = r + m + x;
   const attendance = total > 0 ? Math.round((r / total) * 10000) / 100 : 0;
   const completion = total > 0 ? Math.round(((r + m) / total) * 10000) / 100 : 0;
-
   return { total, r, m, x, attendance, completion };
 }
 
 export function getWeekly(records: AttendanceRecord[], student: Student) {
   const applicable = getApplicable(records, student);
   const weeks = new Map<number, { r: number; m: number; x: number; emojis: string }>();
-
   for (const rec of applicable) {
     const week = getSchoolWeek(rec.date);
     if (!weeks.has(week)) weeks.set(week, { r: 0, m: 0, x: 0, emojis: '' });
     const w = weeks.get(week)!;
-    if (rec.status === 'R') { w.r++; w.emojis += '✅'; }
-    else if (rec.status === 'M') { w.m++; w.emojis += '🔄'; }
-    else { w.x++; w.emojis += '⏳'; }
+    if (rec.status === 'R') {
+      w.r++;
+      w.emojis += '✅';
+    } else if (rec.status === 'M') {
+      w.m++;
+      w.emojis += '🔄';
+    } else {
+      w.x++;
+      w.emojis += '⏳';
+    }
   }
-
-  const result = [];
+  const result: Array<{ week: number; r: number; m: number; x: number; emojis: string; attendance: number }> = [];
   for (const [week, data] of weeks) {
     const total = data.r + data.m + data.x;
     const attendance = total > 0 ? Math.round((data.r / total) * 10000) / 100 : 0;
