@@ -141,3 +141,22 @@ INSERT INTO public.attendance_records (student_id, date, status) VALUES
 ('MS001', '2026-08-24', 'R'), ('MS002', '2026-08-24', 'X'), ('MS003', '2026-08-24', 'R'), ('MS004', '2026-08-24', 'R'), ('MS005', '2026-08-24', 'M'), ('MS006', '2026-08-24', 'X'), ('MS007', '2026-08-24', 'R'), ('MS008', '2026-08-24', 'R'), ('MS009', '2026-08-24', 'R'), ('MS010', '2026-08-24', 'R'),
 ('MS001', '2026-08-25', 'R'), ('MS002', '2026-08-25', 'X'), ('MS003', '2026-08-25', 'R'), ('MS004', '2026-08-25', 'X'), ('MS005', '2026-08-25', 'M'), ('MS006', '2026-08-25', 'X'), ('MS007', '2026-08-25', 'X'), ('MS008', '2026-08-25', 'R'), ('MS009', '2026-08-25', 'X'), ('MS010', '2026-08-25', 'R'),
 ('MS001', '2026-08-26', 'R'), ('MS002', '2026-08-26', 'X'), ('MS003', '2026-08-26', 'X'), ('MS004', '2026-08-26', 'X'), ('MS005', '2026-08-26', 'R'), ('MS006', '2026-08-26', 'X'), ('MS007', '2026-08-26', 'X'), ('MS008', '2026-08-26', 'X'), ('MS009', '2026-08-26', 'X'), ('MS010', '2026-08-26', 'R');
+
+
+-- ============================================
+-- ANNOUNCEMENTS TABLE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS public.announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  arabic_text TEXT,
+  english_text TEXT,
+  schedule TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read announcements" ON public.announcements FOR SELECT TO anon, authenticated USING (true);
+
+GRANT SELECT ON public.announcements TO anon, authenticated;
