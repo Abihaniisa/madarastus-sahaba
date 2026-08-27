@@ -50,248 +50,48 @@ img {
 
 input,
 select,
-button {
+button,
+textarea {
   font-family: inherit;
   font-size: inherit;
 }
 
 button {
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-/* ============ SKELETON LOADING ============ */
-.skeleton {
-  background: linear-gradient(90deg, #f5efe8 25%, #e8dfd6 50%, #f5efe8 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+/* Certificate frame for report card */
+.certificate-frame {
+  border: 3px solid #1a472a;
   border-radius: 8px;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* ============ PREMIUM CARD ============ */
-.premium-card {
-  background: #ffffff;
-  border: 1px solid #e8dfd6;
-  border-radius: 20px;
-  box-shadow: 0 8px 30px rgba(26, 71, 42, 0.05);
-  transition: all 0.2s ease;
-}
-
-.premium-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 40px rgba(26, 71, 42, 0.08);
-}
-
-/* ============ BUTTONS ============ */
-.btn-primary {
-  background: #1a472a;
-  color: white;
-  border: none;
-  border-radius: 999px;
-  padding: 12px 24px;
-  font-weight: 600;
-  font-size: 14px;
-  box-shadow: 0 4px 15px rgba(26, 71, 42, 0.3);
-  transition: all 0.2s ease;
-}
-
-.btn-primary:hover {
-  background: #123820;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(26, 71, 42, 0.4);
-}
-
-.btn-secondary {
-  background: transparent;
-  color: #1a472a;
-  border: 1.5px solid #1a472a;
-  border-radius: 999px;
-  padding: 12px 24px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: #1a472a;
-  color: white;
-}
-
-/* ============ ANNOUNCEMENT CARD ============ */
-.announcement-card {
-  background: linear-gradient(135deg, #1a472a, #2c6a56);
-  color: white;
-  border-radius: 20px;
-  padding: 24px;
-  margin: 16px 0;
-  box-shadow: 0 15px 40px rgba(26, 71, 42, 0.15);
+  padding: 24px 20px;
   position: relative;
+  background: #ffffff;
 }
 
-.announcement-card .dismiss-btn {
+.certificate-frame::before {
+  content: '';
   position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  border: 1px solid #c9a94e;
+  border-radius: 4px;
+  pointer-events: none;
 }
 
-.announcement-card .dismiss-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
+/* Corner accents */
+.corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #c9a94e;
+  border-style: solid;
+  border-width: 0;
 }
 
-/* ============ ARABIC TEXT ============ */
-.arabic-text {
-  font-family: 'Amiri', 'Noto Naskh Arabic', serif;
-  direction: rtl;
-  text-align: right;
-  font-size: 22px;
-  line-height: 2;
-  letter-spacing: 0;
-  color: #fdf9f5;
-}
-
-/* ============ STATUS BADGES ============ */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-r {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-m {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.status-x {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-/* ============ STUDENT CARD ============ */
-.student-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  border-bottom: 1px solid #f5efe8;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.student-card:hover {
-  background: #fdf9f5;
-}
-
-.student-card:last-child {
-  border-bottom: none;
-}
-
-/* ============ PIN BUTTON ============ */
-.pin-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  transition: all 0.2s ease;
-  color: #a6947e;
-}
-
-.pin-btn:hover {
-  background: #f5efe8;
-  color: #1a472a;
-}
-
-.pin-btn.active {
-  background: #f0e4d8;
-  color: #1a472a;
-}
-
-/* ============ PROGRESS BAR ============ */
-.progress-track {
-  height: 6px;
-  background: #f5efe8;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-
-/* ============ AVATARS ============ */
-.avatar {
-  border-radius: 50%;
-  object-fit: cover;
-  background: #f5efe8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: white;
-}
-
-.avatar-sm {
-  width: 48px;
-  height: 48px;
-  font-size: 18px;
-}
-
-.avatar-md {
-  width: 96px;
-  height: 96px;
-  font-size: 32px;
-}
-
-.avatar-lg {
-  width: 120px;
-  height: 120px;
-  font-size: 40px;
-}
-
-/* ============ HEADINGS ============ */
-.heading-display {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-/* ============ ANIMATIONS ============ */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-  animation: fadeIn 0.3s ease;
-}
+.corner-tl { top: -3px; left: -3px; border-top-width: 3px; border-left-width: 3px; }
+.corner-tr { top: -3px; right: -3px; border-top-width: 3px; border-right-width: 3px; }
+.corner-bl { bottom: -3px; left: -3px; border-bottom-width: 3px; border-left-width: 3px; }
+.corner-br { bottom: -3px; right: -3px; border-bottom-width: 3px; border-right-width: 3px; }
