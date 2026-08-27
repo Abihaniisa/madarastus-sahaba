@@ -157,6 +157,25 @@ export async function deleteAchievement(formData: FormData) {
   redirect('/admin');
 }
 
+export async function saveAnnouncement(formData: FormData) {
+  await requireAdmin();
+  const arabic_text = (formData.get('arabic_text') as string) || null;
+  const english_text = (formData.get('english_text') as string) || null;
+  const schedule = (formData.get('schedule') as string) || null;
+
+  if (!arabic_text && !english_text && !schedule) {
+    redirect('/admin');
+  }
+
+  await supabaseAdmin.from('announcements').insert({
+    arabic_text,
+    english_text,
+    schedule,
+  });
+
+  redirect('/admin');
+}
+
 export async function logout() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
