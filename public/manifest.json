@@ -1,1 +1,16 @@
-
+{
+  "name": "Madrasatus Sahaba",
+  "short_name": "Madrasa",
+  "description": "Student attendance and academic records for Madrasatus Sahaba Litahfizul Quran",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf8",
+  "theme_color": "#1a472a",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
