@@ -68,12 +68,6 @@ export function getSchoolWeek(dateStr: string): number {
   return Math.floor(diffDays / 7) + 1;
 }
 
-export function isRecitationDay(dateStr: string): boolean {
-  const date = new Date(dateStr + 'T00:00:00Z');
-  const day = date.getUTCDay();
-  return day >= 1 && day <= 4;
-}
-
 export function deduplicate(records: AttendanceRecord[]): AttendanceRecord[] {
   const seen = new Set<string>();
   const result: AttendanceRecord[] = [];
