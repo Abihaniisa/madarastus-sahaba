@@ -67,20 +67,22 @@ export default async function ReportPage() {
           <Link href="/" style={{ color: '#1a472a', fontSize: '14px', fontWeight: 600 }}>
             ← Back to Home
           </Link>
-          <button
-            onClick={() => window.print()}
+          <a
+            href="javascript:window.print()"
+            className="no-print"
             style={{
               background: '#1a472a',
               color: 'white',
-              border: 'none',
               borderRadius: '999px',
               padding: '12px 24px',
               fontWeight: 700,
               fontSize: '14px',
+              textDecoration: 'none',
+              display: 'inline-block',
             }}
           >
             Print / Save as PDF
-          </button>
+          </a>
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
