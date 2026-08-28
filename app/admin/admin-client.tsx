@@ -168,16 +168,19 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Students Tab State
   const [students, setStudents] = useState<Student[]>([]);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentDate, setNewStudentDate] = useState('');
 
+  // Attendance Tab State
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'R' | 'M' | 'X'>>({});
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [savingAttendance, setSavingAttendance] = useState(false);
 
+  // Achievements Tab State
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [achievementStudent, setAchievementStudent] = useState('');
   const [achievementTitle, setAchievementTitle] = useState('');
@@ -185,10 +188,15 @@ function Dashboard() {
   const [achievementCategory, setAchievementCategory] = useState('');
   const [achievementDate, setAchievementDate] = useState('');
 
+  // Announcement Tab State
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [arabicText, setArabicText] = useState('');
   const [englishText, setEnglishText] = useState('');
   const [scheduleText, setScheduleText] = useState('');
+
+  // ============================================
+  // DATA FETCHING
+  // ============================================
 
   useEffect(() => {
     loadData();
@@ -235,6 +243,10 @@ function Dashboard() {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
   }
+
+  // ============================================
+  // STUDENTS TAB
+  // ============================================
 
   function getWeekFromDate(dateStr: string): number {
     const start = new Date('2026-07-13');
@@ -292,6 +304,10 @@ function Dashboard() {
     }
   }
 
+  // ============================================
+  // ATTENDANCE TAB
+  // ============================================
+
   function handleDateChange(date: string) {
     const today = new Date().toISOString().split('T')[0];
     if (date > today) {
@@ -348,6 +364,10 @@ function Dashboard() {
     }
   }
 
+  // ============================================
+  // ACHIEVEMENTS TAB
+  // ============================================
+
   async function handleAddAchievement() {
     if (!achievementStudent || !achievementTitle.trim()) {
       showMessage('error', 'Please select a student and enter a title');
@@ -391,6 +411,10 @@ function Dashboard() {
     }
   }
 
+  // ============================================
+  // ANNOUNCEMENT TAB
+  // ============================================
+
   async function handleSaveAnnouncement() {
     try {
       const result = await saveAnnouncement({
@@ -410,6 +434,10 @@ function Dashboard() {
     }
   }
 
+  // ============================================
+  // LOGOUT
+  // ============================================
+
   async function handleLogout() {
     try {
       await logout();
@@ -421,6 +449,10 @@ function Dashboard() {
     }
   }
 
+  // ============================================
+  // RENDER
+  // ============================================
+
   if (loading && activeTab === 'students') {
     return (
       <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -431,6 +463,7 @@ function Dashboard() {
 
   return (
     <div className="container" style={{ padding: '1rem 0 2rem' }}>
+      {/* Header */}
       <div
         style={{
           display: 'flex',
@@ -447,6 +480,7 @@ function Dashboard() {
         </button>
       </div>
 
+      {/* Message */}
       {message && (
         <div
           style={{
@@ -461,6 +495,7 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Tabs */}
       <div
         style={{
           display: 'flex',
@@ -492,9 +527,10 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* Students Tab */}
+      {/* ===== TAB: STUDENTS ===== */}
       {activeTab === 'students' && (
         <div>
+          {/* Add Student Form */}
           <div className="card" style={{ marginBottom: '1rem' }}>
             <h4 style={{ marginBottom: '0.5rem' }}>Add Student</h4>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -527,6 +563,7 @@ function Dashboard() {
             </div>
           </div>
 
+          {/* Student List */}
           <div className="card">
             <h4 style={{ marginBottom: '0.5rem' }}>
               Students ({students.length})
@@ -554,6 +591,7 @@ function Dashboard() {
                             if (e.target.value !== student.full_name) {
                               handleUpdateStudent(student.id, e.target.value, student.joining_week);
                             }
+                            e.target.style.borderColor = 'transparent';
                           }}
                           style={{
                             width: '100%',
@@ -563,7 +601,6 @@ function Dashboard() {
                             background: 'transparent',
                           }}
                           onFocus={(e) => { e.target.style.borderColor = 'var(--color-border)'; }}
-                          onBlur={(e) => { e.target.style.borderColor = 'transparent'; }}
                         />
                       </td>
                       <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>
@@ -618,7 +655,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Attendance Tab */}
+      {/* ===== TAB: ATTENDANCE ===== */}
       {activeTab === 'attendance' && (
         <div>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -737,7 +774,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Achievements Tab */}
+      {/* ===== TAB: ACHIEVEMENTS ===== */}
       {activeTab === 'achievements' && (
         <div>
           <div className="card" style={{ marginBottom: '1rem' }}>
@@ -841,7 +878,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Announcement Tab */}
+      {/* ===== TAB: ANNOUNCEMENT ===== */}
       {activeTab === 'announcement' && (
         <div>
           {announcement && (

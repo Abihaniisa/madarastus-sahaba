@@ -6,29 +6,18 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from './admin-server';
 
-// ============================================
-// HELPERS
-// ============================================
-
 function getNextStudentId(students: { id: string }[]): string {
   const ids = students.map((s) => parseInt(s.id.replace('MS', ''), 10));
   const max = ids.length > 0 ? Math.max(...ids) : 0;
   return `MS${String(max + 1).padStart(3, '0')}`;
 }
 
-// ============================================
-// ADD STUDENT
-// ============================================
-
 export async function addStudent(data: {
   full_name: string;
   joining_date: string;
   joining_week: number;
 }) {
-  const { data: existing } = await supabaseAdmin
-    .from('students')
-    .select('id');
-
+  const { data: existing } = await supabaseAdmin.from('students').select('id');
   const id = getNextStudentId(existing || []);
 
   const { data: student, error } = await supabaseAdmin
@@ -53,10 +42,6 @@ export async function addStudent(data: {
   revalidatePath('/admin');
   return student;
 }
-
-// ============================================
-// UPDATE STUDENT
-// ============================================
 
 export async function updateStudent(data: {
   id: string;
@@ -86,10 +71,6 @@ export async function updateStudent(data: {
   revalidatePath('/admin');
   return student;
 }
-
-// ============================================
-// SAVE ATTENDANCE BATCH
-// ============================================
 
 export async function saveAttendanceBatch(data: {
   records: Array<{
@@ -141,10 +122,6 @@ export async function saveAttendanceBatch(data: {
   return { success: errors.length === 0, count: successCount, errors };
 }
 
-// ============================================
-// ADD ACHIEVEMENT
-// ============================================
-
 export async function addAchievement(data: {
   student_id: string;
   title: string;
@@ -174,10 +151,6 @@ export async function addAchievement(data: {
   return achievement;
 }
 
-// ============================================
-// DELETE ACHIEVEMENT
-// ============================================
-
 export async function deleteAchievement(data: { id: string }) {
   const { error } = await supabaseAdmin
     .from('achievements')
@@ -193,10 +166,6 @@ export async function deleteAchievement(data: { id: string }) {
   revalidatePath('/admin');
   return { success: true };
 }
-
-// ============================================
-// SAVE ANNOUNCEMENT
-// ============================================
 
 export async function saveAnnouncement(data: {
   arabic_text?: string;
@@ -222,10 +191,6 @@ export async function saveAnnouncement(data: {
   revalidatePath('/admin');
   return announcement;
 }
-
-// ============================================
-// LOGOUT
-// ============================================
 
 export async function logout() {
   const cookieStore = await cookies();
