@@ -1,14 +1,23 @@
-import { createServerClient } from '@supabase/ssr';
+import { redirect } from 'next/navigation';
+import { createClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { supabaseAdmin } from './admin-server';
 import AdminClient from './admin-client';
+
+// ============================================
+// FORCE DYNAMIC
+// ============================================
 
 export const dynamic = 'force-dynamic';
 
+// ============================================
+// SERVER COMPONENT: AUTH CHECK
+// ============================================
+
 export default async function AdminPage() {
+  // ✅ FIX: await cookies() - mandatory in Next.js 15
   const cookieStore = await cookies();
 
-  const supabase = createServerClient(
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -20,36 +29,14 @@ export default async function AdminPage() {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: session } = await supabase.auth.getSession();
 
-  if (!user) {
-    return <AdminClient mode="login" students={[]} achievements={[]} announcement={null} />;
+  // If already logged in, redirect to dashboard
+  if (session?.session) {
+    // ✅ Use relative redirect, NOT localhost
+    redirect('/admin');
   }
 
-  const { data: students } = await supabaseAdmin
-    .from('students')
-    .select('*')
-    .order('id');
-
-  const { data: achievements } = await supabaseAdmin
-    .from('achievements')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  const { data: announcementData } = await supabaseAdmin
-    .from('announcements')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  return (
-    <AdminClient
-      mode="dashboard"
-      students={students || []}
-      achievements={achievements || []}
-      announcement={announcementData && announcementData.length > 0 ? announcementData[0] : null}
-    />
-  );
+  // Render login form (client component)
+  return <AdminClient />;
 }

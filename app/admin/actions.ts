@@ -1,184 +1,239 @@
 'use server';
 
-import 'server-only';
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
+import { createClient } from '@supabase/ssr';
+import { supabaseAdmin } from './admin-server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// ============================================
+// HELPERS
+// ============================================
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error(
-    'Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.'
-  );
+function getNextStudentId(students: { id: string }[]): string {
+  const ids = students.map((s) => parseInt(s.id.replace('MS', ''), 10));
+  const max = ids.length > 0 ? Math.max(...ids) : 0;
+  return `MS${String(max + 1).padStart(3, '0')}`;
 }
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+// ============================================
+// ADD STUDENT
+// ============================================
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
-  );
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/admin');
-  }
-  return user;
-}
-
-export async function addStudent(formData: FormData) {
-  await requireAdmin();
-  const full_name = formData.get('full_name') as string;
-  const joining_date = (formData.get('joining_date') as string) || null;
-  const joining_week = formData.get('joining_week')
-    ? parseInt(formData.get('joining_week') as string)
-    : null;
-
-  if (!full_name) {
-    redirect('/admin');
-  }
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: lastStudent } = await supabaseAdmin
-      .from('students')
-      .select('id')
-      .order('id', { ascending: false })
-      .limit(1);
-
-    let nextNumber = 1;
-    if (lastStudent && lastStudent.length > 0) {
-      const lastNum = parseInt(lastStudent[0].id.replace('MS', ''), 10);
-      nextNumber = lastNum + 1;
-    }
-    const newId = `MS${String(nextNumber).padStart(3, '0')}`;
-
-    const { error } = await supabaseAdmin.from('students').insert({
-      id: newId,
-      full_name,
-      joining_date: joining_date || null,
-      joining_week,
-    });
-
-    if (!error) {
-      redirect('/admin');
-    }
-  }
-
-  redirect('/admin');
-}
-
-export async function updateStudent(formData: FormData) {
-  await requireAdmin();
-  const id = formData.get('id') as string;
-  const full_name = formData.get('full_name') as string;
-  const joining_week = formData.get('joining_week')
-    ? parseInt(formData.get('joining_week') as string)
-    : null;
-  const is_active = formData.get('is_active') === 'true';
-
-  if (!id || !full_name) {
-    redirect('/admin');
-  }
-
-  await supabaseAdmin
+export async function addStudent(data: {
+  full_name: string;
+  joining_date: string;
+  joining_week: number;
+}) {
+  // Get existing students to generate next ID
+  const { data: existing } = await supabaseAdmin
     .from('students')
-    .update({ full_name, joining_week, is_active })
-    .eq('id', id);
+    .select('id');
 
-  redirect('/admin');
-}
+  const id = getNextStudentId(existing || []);
 
-export async function saveAttendanceBatch(
-  records: Array<{ student_id: string; date: string; status: string }>
-) {
-  await requireAdmin();
-
-  for (const record of records) {
-    if (!['R', 'M', 'X'].includes(record.status)) {
-      return { error: 'Invalid status' };
-    }
-  }
-
-  const { error } = await supabaseAdmin
-    .from('attendance_records')
-    .upsert(records, { onConflict: 'student_id,date' });
+  const { data: student, error } = await supabaseAdmin
+    .from('students')
+    .insert({
+      id,
+      full_name: data.full_name,
+      joining_date: data.joining_date,
+      joining_week: data.joining_week,
+      is_active: true,
+    })
+    .select()
+    .single();
 
   if (error) {
-    return { error: error.message };
+    console.error('Error adding student:', error);
+    return null;
   }
 
+  revalidatePath('/');
+  revalidatePath('/student');
+  revalidatePath('/admin');
+  return student;
+}
+
+// ============================================
+// UPDATE STUDENT
+// ============================================
+
+export async function updateStudent(data: {
+  id: string;
+  full_name?: string;
+  joining_week?: number;
+  is_active?: boolean;
+}) {
+  const updateData: any = {};
+  if (data.full_name !== undefined) updateData.full_name = data.full_name;
+  if (data.joining_week !== undefined) updateData.joining_week = data.joining_week;
+  if (data.is_active !== undefined) updateData.is_active = data.is_active;
+
+  const { data: student, error } = await supabaseAdmin
+    .from('students')
+    .update(updateData)
+    .eq('id', data.id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating student:', error);
+    return null;
+  }
+
+  revalidatePath('/');
+  revalidatePath('/student');
+  revalidatePath('/admin');
+  return student;
+}
+
+// ============================================
+// SAVE ATTENDANCE BATCH
+// ============================================
+
+export async function saveAttendanceBatch(data: {
+  records: Array<{
+    student_id: string;
+    date: string;
+    status: 'R' | 'M' | 'X';
+  }>;
+}) {
+  const today = new Date().toISOString().split('T')[0];
+
+  // Validate no future dates
+  for (const record of data.records) {
+    if (record.date > today) {
+      throw new Error('Cannot record future dates');
+    }
+  }
+
+  // Upsert records
+  let successCount = 0;
+  const errors: string[] = [];
+
+  for (const record of data.records) {
+    const { error } = await supabaseAdmin
+      .from('attendance_records')
+      .upsert(
+        {
+          student_id: record.student_id,
+          date: record.date,
+          status: record.status,
+        },
+        {
+          onConflict: 'student_id,date',
+        }
+      );
+
+    if (error) {
+      errors.push(`${record.student_id}: ${error.message}`);
+    } else {
+      successCount++;
+    }
+  }
+
+  revalidatePath('/');
+  revalidatePath('/student');
+  revalidatePath('/admin');
+
+  if (errors.length > 0) {
+    console.error('Attendance save errors:', errors);
+  }
+
+  return { success: errors.length === 0, count: successCount, errors };
+}
+
+// ============================================
+// ADD ACHIEVEMENT
+// ============================================
+
+export async function addAchievement(data: {
+  student_id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  date?: string;
+}) {
+  const { data: achievement, error } = await supabaseAdmin
+    .from('achievements')
+    .insert({
+      student_id: data.student_id,
+      title: data.title,
+      description: data.description || null,
+      category: data.category || null,
+      date: data.date || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding achievement:', error);
+    return null;
+  }
+
+  revalidatePath('/student');
+  revalidatePath('/admin');
+  return achievement;
+}
+
+// ============================================
+// DELETE ACHIEVEMENT
+// ============================================
+
+export async function deleteAchievement(data: { id: string }) {
+  const { error } = await supabaseAdmin
+    .from('achievements')
+    .delete()
+    .eq('id', data.id);
+
+  if (error) {
+    console.error('Error deleting achievement:', error);
+    return { success: false };
+  }
+
+  revalidatePath('/student');
+  revalidatePath('/admin');
   return { success: true };
 }
 
-export async function addAchievement(formData: FormData) {
-  await requireAdmin();
-  const student_id = formData.get('student_id') as string;
-  const title = formData.get('title') as string;
-  const category = (formData.get('category') as string) || null;
-  const date = (formData.get('date') as string) || null;
-  const description = (formData.get('description') as string) || null;
+// ============================================
+// SAVE ANNOUNCEMENT
+// ============================================
 
-  if (!student_id || !title) {
-    redirect('/admin');
+export async function saveAnnouncement(data: {
+  arabic_text?: string;
+  english_text?: string;
+  schedule?: string;
+}) {
+  const { data: announcement, error } = await supabaseAdmin
+    .from('announcements')
+    .insert({
+      arabic_text: data.arabic_text || null,
+      english_text: data.english_text || null,
+      schedule: data.schedule || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving announcement:', error);
+    return null;
   }
 
-  await supabaseAdmin
-    .from('achievements')
-    .insert({ student_id, title, category, date, description });
-
-  redirect('/admin');
+  revalidatePath('/');
+  revalidatePath('/admin');
+  return announcement;
 }
 
-export async function deleteAchievement(formData: FormData) {
-  await requireAdmin();
-  const id = formData.get('id') as string;
-
-  if (!id) {
-    redirect('/admin');
-  }
-
-  await supabaseAdmin.from('achievements').delete().eq('id', id);
-
-  redirect('/admin');
-}
-
-export async function saveAnnouncement(formData: FormData) {
-  await requireAdmin();
-  const arabic_text = (formData.get('arabic_text') as string) || null;
-  const english_text = (formData.get('english_text') as string) || null;
-  const schedule = (formData.get('schedule') as string) || null;
-
-  if (!arabic_text && !english_text && !schedule) {
-    redirect('/admin');
-  }
-
-  await supabaseAdmin.from('announcements').insert({
-    arabic_text,
-    english_text,
-    schedule,
-  });
-
-  redirect('/admin');
-}
+// ============================================
+// LOGOUT
+// ============================================
 
 export async function logout() {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -189,13 +244,15 @@ export async function logout() {
         set(name: string, value: string, options: any) {
           cookieStore.set(name, value, options);
         },
-        remove(name: string, options: any) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        remove(name: string) {
+          cookieStore.set(name, '', { maxAge: 0 });
         },
       },
     }
   );
 
   await supabase.auth.signOut();
+
+  revalidatePath('/admin');
   redirect('/admin');
 }

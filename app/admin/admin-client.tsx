@@ -1,10 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
-import { SCHOOL } from '../../lib';
-import type { Student, Achievement } from '../../lib';
+import Link from 'next/link';
+import {
+  supabase,
+  Student,
+  AttendanceRecord,
+  Achievement,
+  Announcement,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  getStudents,
+  getActiveStudents,
+  getAttendanceByDate,
+  getAchievements,
+  getLatestAnnouncement,
+} from '@/lib';
 import {
   addStudent,
   updateStudent,
@@ -15,343 +28,1010 @@ import {
   logout,
 } from './actions';
 
-interface Props {
-  mode: 'login' | 'dashboard';
-  students: Student[];
-  achievements: Achievement[];
-  announcement: any;
-}
+type Tab = 'students' | 'attendance' | 'achievements' | 'announcement';
 
-export default function AdminClient({ mode, students, achievements, announcement }: Props) {
-  const router = useRouter();
+// ============================================
+// LOGIN FORM (shown when not authenticated)
+// ============================================
+
+function LoginForm({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<'students' | 'attendance' | 'achievements' | 'announcement'>('students');
-  const [message, setMessage] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [statusMap, setStatusMap] = useState<Record<string, string>>({});
-  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
 
-  if (mode === 'login') {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-    const handleLogin = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError('');
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabaseClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get(name: string) {
+              const value = document.cookie
+                .split('; ')
+                .find((row) => row.startsWith(name + '='))
+                ?.split('=')[1];
+              return value;
+            },
+            set(name: string, value: string, options: any) {
+              document.cookie = `${name}=${value}; path=/; max-age=${options?.maxAge || 86400}`;
+            },
+            remove(name: string) {
+              document.cookie = `${name}=; path=/; max-age=0`;
+            },
+          },
+        }
+      );
+
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+
       if (error) {
-        setError(error.message);
+        setError('Invalid email or password');
         setLoading(false);
         return;
       }
-      router.push('/admin');
-      router.refresh();
-    };
 
-    return (
-      <main className="login-wrap">
-        <div className="login-card">
-          <div className="login-mark">
-            <svg viewBox="0 0 24 24" strokeWidth="1.7"><path d="M12 3c-1.8 3-2.6 5.6-2.6 8 0 3.6 2.6 6.6 2.6 9.5 0-2.9 2.6-5.9 2.6-9.5 0-2.4-.8-5-2.6-8Z"/><path d="M4 20c2-1 4.3-1.6 8-1.6s6 .6 8 1.6"/></svg>
-          </div>
-          <h2>{SCHOOL.shortName}</h2>
-          <p className="sub">Admin Login</p>
-          <form onSubmit={handleLogin}>
-            <div className="field">
-              <label htmlFor="admin-email">Email</label>
-              <input id="admin-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="admin@madrasatussahaba.org" />
-            </div>
-            <div className="field">
-              <label htmlFor="admin-pass">Password</label>
-              <input id="admin-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
-            </div>
-            {error && <p style={{ color: 'var(--status-x)', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
-            <button className="btn btn-gold btn-block" type="submit" style={{ marginTop: '22px' }} disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-          <a href="/" className="login-back">← Back to site</a>
-        </div>
-      </main>
-    );
-  }
-
-  const toggleStatus = (studentId: string) => {
-    const current = statusMap[studentId] || 'X';
-    const next = current === 'X' ? 'R' : current === 'R' ? 'M' : 'X';
-    setStatusMap({ ...statusMap, [studentId]: next });
-  };
-
-  const toggleSelect = (studentId: string) => {
-    const newSet = new Set(selectedStudents);
-    if (newSet.has(studentId)) newSet.delete(studentId);
-    else newSet.add(studentId);
-    setSelectedStudents(newSet);
-  };
-
-  const applyBatch = (status: string) => {
-    const newMap = { ...statusMap };
-    for (const id of selectedStudents) newMap[id] = status;
-    setStatusMap(newMap);
-    setSelectedStudents(new Set());
-  };
-
-  const saveAttendance = async () => {
-    setMessage('');
-    setError('');
-    const entries = Object.entries(statusMap);
-    if (entries.length === 0) { setError('No attendance changes to save.'); return; }
-    const records = entries.map(([student_id, status]) => ({ student_id, date: selectedDate, status }));
-    try {
-      const result = await saveAttendanceBatch(records);
-      if (result.error) setError(result.error);
-      else { setMessage('Attendance saved successfully.'); setStatusMap({}); router.refresh(); }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save attendance.');
+      onLogin();
+    } catch {
+      setError('An error occurred. Please try again.');
+      setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.push('/admin');
-    router.refresh();
-  };
+  return (
+    <div
+      className="container"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '80vh',
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          maxWidth: '400px',
+          width: '100%',
+          padding: '2rem',
+        }}
+      >
+        <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          Madrasatus Sahaba Admin
+        </h2>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.75rem',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '1rem',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.75rem',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '1rem',
+              }}
+            />
+          </div>
+
+          {error && (
+            <p style={{ color: '#d32f2f', fontSize: '0.9rem', marginBottom: '1rem', textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading}
+            style={{ width: '100%' }}
+          >
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
+        </form>
+
+        <p style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem' }}>
+          <Link href="/" style={{ color: 'var(--color-text-light)' }}>
+            ← Back to Home
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// DASHBOARD (shown when authenticated)
+// ============================================
+
+function Dashboard() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>('students');
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Students Tab State
+  const [students, setStudents] = useState<Student[]>([]);
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentDate, setNewStudentDate] = useState('');
+
+  // Attendance Tab State
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activeStudents, setActiveStudents] = useState<Student[]>([]);
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, 'R' | 'M' | 'X'>>({});
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [savingAttendance, setSavingAttendance] = useState(false);
+
+  // Achievements Tab State
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [achievementStudent, setAchievementStudent] = useState('');
+  const [achievementTitle, setAchievementTitle] = useState('');
+  const [achievementDesc, setAchievementDesc] = useState('');
+  const [achievementCategory, setAchievementCategory] = useState('');
+  const [achievementDate, setAchievementDate] = useState('');
+
+  // Announcement Tab State
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [arabicText, setArabicText] = useState('');
+  const [englishText, setEnglishText] = useState('');
+  const [scheduleText, setScheduleText] = useState('');
+
+  // ============================================
+  // DATA FETCHING
+  // ============================================
+
+  useEffect(() => {
+    loadData();
+  }, [activeTab]);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      if (activeTab === 'students') {
+        const data = await getStudents();
+        setStudents(data);
+      } else if (activeTab === 'attendance') {
+        const [activeData, attendanceData] = await Promise.all([
+          getActiveStudents(),
+          getAttendanceByDate(selectedDate),
+        ]);
+        setActiveStudents(activeData);
+        const map: Record<string, 'R' | 'M' | 'X'> = {};
+        attendanceData.forEach((r) => {
+          map[r.student_id] = r.status as 'R' | 'M' | 'X';
+        });
+        setAttendanceMap(map);
+      } else if (activeTab === 'achievements') {
+        const data = await getAchievements();
+        setAchievements(data);
+      } else if (activeTab === 'announcement') {
+        const data = await getLatestAnnouncement();
+        setAnnouncement(data);
+        if (data) {
+          setArabicText(data.arabic_text || '');
+          setEnglishText(data.english_text || '');
+          setScheduleText(data.schedule || '');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      showMessage('error', 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function showMessage(type: 'success' | 'error', text: string) {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 4000);
+  }
+
+  // ============================================
+  // STUDENTS TAB
+  // ============================================
+
+  function getWeekFromDate(dateStr: string): number {
+    const start = new Date('2026-07-13');
+    const date = new Date(dateStr);
+    const diff = date.getTime() - start.getTime();
+    return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
+  }
+
+  async function handleAddStudent() {
+    if (!newStudentName.trim() || !newStudentDate) {
+      showMessage('error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      const week = getWeekFromDate(newStudentDate);
+      const result = await addStudent({
+        full_name: newStudentName.trim(),
+        joining_date: newStudentDate,
+        joining_week: week,
+      });
+      if (result) {
+        showMessage('success', `Student ${result.id} added successfully`);
+        setNewStudentName('');
+        setNewStudentDate('');
+        await loadData();
+      } else {
+        showMessage('error', 'Failed to add student');
+      }
+    } catch (error) {
+      console.error('Error adding student:', error);
+      showMessage('error', 'Failed to add student');
+    }
+  }
+
+  async function handleToggleActive(id: string, current: boolean) {
+    try {
+      await updateStudent({ id, is_active: !current });
+      showMessage('success', 'Student status updated');
+      await loadData();
+    } catch (error) {
+      console.error('Error updating student:', error);
+      showMessage('error', 'Failed to update student');
+    }
+  }
+
+  async function handleUpdateStudent(id: string, name: string, week: number | null) {
+    try {
+      await updateStudent({ id, full_name: name, joining_week: week ?? undefined });
+      showMessage('success', 'Student updated successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Error updating student:', error);
+      showMessage('error', 'Failed to update student');
+    }
+  }
+
+  // ============================================
+  // ATTENDANCE TAB
+  // ============================================
+
+  function handleDateChange(date: string) {
+    const today = new Date().toISOString().split('T')[0];
+    if (date > today) {
+      showMessage('error', 'Cannot select future dates');
+      return;
+    }
+    setSelectedDate(date);
+    loadData();
+  }
+
+  function handleStatusToggle(studentId: string, status: 'R' | 'M' | 'X') {
+    setAttendanceMap((prev) => ({
+      ...prev,
+      [studentId]: status,
+    }));
+  }
+
+  function handleSelectAll() {
+    if (selectedStudents.size === activeStudents.length) {
+      setSelectedStudents(new Set());
+    } else {
+      setSelectedStudents(new Set(activeStudents.map((s) => s.id)));
+    }
+  }
+
+  function handleBatchStatus(status: 'R' | 'M' | 'X') {
+    const newMap = { ...attendanceMap };
+    selectedStudents.forEach((id) => {
+      newMap[id] = status;
+    });
+    setAttendanceMap(newMap);
+  }
+
+  async function handleSaveAttendance() {
+    setSavingAttendance(true);
+    try {
+      const records = activeStudents.map((student) => ({
+        student_id: student.id,
+        date: selectedDate,
+        status: attendanceMap[student.id] || 'X',
+      }));
+      const result = await saveAttendanceBatch({ records });
+      if (result.success) {
+        showMessage('success', `Attendance saved for ${result.count} students`);
+        await loadData();
+      } else {
+        showMessage('error', 'Failed to save attendance');
+      }
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      showMessage('error', 'Failed to save attendance');
+    } finally {
+      setSavingAttendance(false);
+    }
+  }
+
+  // ============================================
+  // ACHIEVEMENTS TAB
+  // ============================================
+
+  async function handleAddAchievement() {
+    if (!achievementStudent || !achievementTitle.trim()) {
+      showMessage('error', 'Please select a student and enter a title');
+      return;
+    }
+
+    try {
+      const result = await addAchievement({
+        student_id: achievementStudent,
+        title: achievementTitle.trim(),
+        description: achievementDesc.trim() || undefined,
+        category: achievementCategory.trim() || undefined,
+        date: achievementDate || undefined,
+      });
+      if (result) {
+        showMessage('success', 'Achievement added successfully');
+        setAchievementStudent('');
+        setAchievementTitle('');
+        setAchievementDesc('');
+        setAchievementCategory('');
+        setAchievementDate('');
+        await loadData();
+      } else {
+        showMessage('error', 'Failed to add achievement');
+      }
+    } catch (error) {
+      console.error('Error adding achievement:', error);
+      showMessage('error', 'Failed to add achievement');
+    }
+  }
+
+  async function handleDeleteAchievement(id: string) {
+    if (!confirm('Delete this achievement?')) return;
+    try {
+      await deleteAchievement({ id });
+      showMessage('success', 'Achievement deleted');
+      await loadData();
+    } catch (error) {
+      console.error('Error deleting achievement:', error);
+      showMessage('error', 'Failed to delete achievement');
+    }
+  }
+
+  // ============================================
+  // ANNOUNCEMENT TAB
+  // ============================================
+
+  async function handleSaveAnnouncement() {
+    try {
+      const result = await saveAnnouncement({
+        arabic_text: arabicText.trim() || undefined,
+        english_text: englishText.trim() || undefined,
+        schedule: scheduleText.trim() || undefined,
+      });
+      if (result) {
+        showMessage('success', 'Announcement posted successfully');
+        await loadData();
+      } else {
+        showMessage('error', 'Failed to post announcement');
+      }
+    } catch (error) {
+      console.error('Error saving announcement:', error);
+      showMessage('error', 'Failed to post announcement');
+    }
+  }
+
+  // ============================================
+  // LOGOUT
+  // ============================================
+
+  async function handleLogout() {
+    try {
+      await logout();
+      router.push('/admin');
+      router.refresh();
+    } catch (error) {
+      console.error('Error logging out:', error);
+      showMessage('error', 'Failed to logout');
+    }
+  }
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  if (loading && activeTab === 'students') {
+    return (
+      <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
-    <main className="admin-shell">
-      <header className="admin-header">
-        <div className="container admin-header-inner">
-          <div className="admin-brand">
-            <div className="dot-mark">
-              <svg viewBox="0 0 24 24" strokeWidth="1.7"><path d="M12 3c-1.8 3-2.6 5.6-2.6 8 0 3.6 2.6 6.6 2.6 9.5 0-2.9 2.6-5.9 2.6-9.5 0-2.4-.8-5-2.6-8Z"/><path d="M4 20c2-1 4.3-1.6 8-1.6s6 .6 8 1.6"/></svg>
-            </div>
-            <div>
-              <span>Admin Dashboard</span>
-              <small>{SCHOOL.name}</small>
-            </div>
-          </div>
-          <button onClick={handleLogout} className="logout-link">
-            <svg viewBox="0 0 24 24" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <div className="container admin-body">
-        <div className="tabs">
-          <button className={`tab-btn ${tab === 'students' ? 'is-active' : ''}`} onClick={() => setTab('students')}>Students</button>
-          <button className={`tab-btn ${tab === 'attendance' ? 'is-active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
-          <button className={`tab-btn ${tab === 'achievements' ? 'is-active' : ''}`} onClick={() => setTab('achievements')}>Achievements</button>
-          <button className={`tab-btn ${tab === 'announcement' ? 'is-active' : ''}`} onClick={() => setTab('announcement')}>Announcement</button>
-        </div>
-
-        {message && <p style={{ color: 'var(--status-r)', fontSize: '13px', marginBottom: '12px', fontWeight: 600 }}>{message}</p>}
-        {error && <p style={{ color: 'var(--status-x)', fontSize: '13px', marginBottom: '12px', fontWeight: 600 }}>{error}</p>}
-
-        {tab === 'students' && (
-          <div className="admin-panel is-active">
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Add Student</div>
-                  <p className="card-sub">Register a new student and set their starting point.</p>
-                </div>
-              </div>
-              <form action={addStudent}>
-                <div className="form-grid">
-                  <div className="field span-2">
-                    <label>Full Name</label>
-                    <input type="text" name="full_name" required placeholder="e.g. Isa Yahya Bayero" />
-                  </div>
-                  <div className="field">
-                    <label>Joining Date</label>
-                    <input type="date" name="joining_date" />
-                  </div>
-                  <div className="field">
-                    <label>Joining Week (optional)</label>
-                    <input type="number" name="joining_week" min="1" max="53" placeholder="e.g. 1" />
-                  </div>
-                </div>
-                <button className="btn btn-gold" type="submit" style={{ marginTop: '18px' }}>Add Student</button>
-              </form>
-            </div>
-
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Existing Students</div>
-                  <p className="card-sub">Edit details or update a student's photo.</p>
-                </div>
-                <span className="count-pill">{students.length} students</span>
-              </div>
-
-              {students.map((student) => (
-                <div key={student.id} className="admin-row">
-                  <div className="avatar sm">{student.full_name.charAt(0).toUpperCase()}</div>
-                  <div className="grow">
-                    <div className="row-name">{student.full_name}</div>
-                    <div className="row-reg">{student.id} · Week {student.joining_week ?? '—'}</div>
-                  </div>
-                  <div className="row-actions">
-                    <span className={`badge ${student.is_active ? 'active' : 'inactive'}`}>
-                      {student.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                    <form action={updateStudent} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <input type="hidden" name="id" value={student.id} />
-                      <input name="full_name" defaultValue={student.full_name} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '12px', width: '130px' }} />
-                      <input name="joining_week" type="number" min="1" max="53" defaultValue={student.joining_week ?? ''} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '12px', width: '60px' }} />
-                      <select name="is_active" defaultValue={student.is_active ? 'true' : 'false'} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '12px' }}>
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                      </select>
-                      <button type="submit" className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '12px' }}>Save</button>
-                    </form>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === 'attendance' && (
-          <div className="admin-panel is-active">
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Record Attendance</div>
-                  <p className="card-sub">Select a date, then tap each student's status.</p>
-                </div>
-              </div>
-              <div className="field">
-                <label>Session Date</label>
-                <input type="date" value={selectedDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSelectedDate(e.target.value)} />
-              </div>
-
-              <div style={{ marginTop: '16px' }}>
-                {students.filter((s) => s.is_active && s.joining_date !== null).map((student) => {
-                  const currentStatus = statusMap[student.id] || 'X';
-                  const isSelected = selectedStudents.has(student.id);
-                  return (
-                    <div key={student.id} className="attendance-row">
-                      <div className="attendance-name">
-                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(student.id)} style={{ width: '16px', height: '16px', accentColor: 'var(--green)' }} />
-                        <div className="avatar sm">{student.full_name.charAt(0).toUpperCase()}</div>
-                        {student.full_name}
-                      </div>
-                      <div className="status-toggle">
-                        <button className={currentStatus === 'R' ? 'sel-r' : ''} onClick={() => toggleStatus(student.id)}>R</button>
-                        <button className={currentStatus === 'M' ? 'sel-m' : ''} onClick={() => { setStatusMap({ ...statusMap, [student.id]: 'M' }); }}>M</button>
-                        <button className={currentStatus === 'X' ? 'sel-x' : ''} onClick={() => { setStatusMap({ ...statusMap, [student.id]: 'X' }); }}>X</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="save-bar">
-                <span className="save-hint">Tap a letter to change status: R → Recited, M → Makeup, X → Pending</span>
-                <button className="btn btn-gold" onClick={saveAttendance}>Save Attendance</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'achievements' && (
-          <div className="admin-panel is-active">
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Add Achievement</div>
-                  <p className="card-sub">Record a student's milestone or recognition.</p>
-                </div>
-              </div>
-              <form action={addAchievement}>
-                <div className="form-grid">
-                  <div className="field span-2">
-                    <label>Student</label>
-                    <select name="student_id" required>
-                      {students.map((s) => <option key={s.id} value={s.id}>{s.id} — {s.full_name}</option>)}
-                    </select>
-                  </div>
-                  <div className="field span-2">
-                    <label>Title</label>
-                    <input type="text" name="title" required placeholder="e.g. Completed Juz' Amma" />
-                  </div>
-                  <div className="field">
-                    <label>Category</label>
-                    <input type="text" name="category" placeholder="e.g. Tahfiz, Tajwid" />
-                  </div>
-                  <div className="field">
-                    <label>Date</label>
-                    <input type="date" name="date" />
-                  </div>
-                  <div className="field span-2">
-                    <label>Description (optional)</label>
-                    <input type="text" name="description" placeholder="Brief description" />
-                  </div>
-                </div>
-                <button className="btn btn-gold" type="submit" style={{ marginTop: '18px' }}>Add Achievement</button>
-              </form>
-            </div>
-
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Existing Achievements</div>
-                </div>
-              </div>
-              {achievements.map((a) => (
-                <div key={a.id} className="admin-row">
-                  <div className="grow">
-                    <div className="row-name">{a.title}</div>
-                    <div className="row-reg">{a.student_id} {a.date ? `— ${a.date}` : ''}</div>
-                  </div>
-                  <form action={deleteAchievement}>
-                    <input type="hidden" name="id" value={a.id} />
-                    <button type="submit" className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '12px', color: 'var(--status-x)' }}>Delete</button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === 'announcement' && (
-          <div className="admin-panel is-active">
-            <div className="card">
-              <div className="card-title-row">
-                <div>
-                  <div className="card-title">Verse of the Week</div>
-                  <p className="card-sub">Shown on the home page announcement card.</p>
-                </div>
-              </div>
-              <form action={saveAnnouncement}>
-                <div className="form-grid">
-                  <div className="field span-2">
-                    <label>Arabic Text</label>
-                    <textarea name="arabic_text" style={{ fontFamily: "'Amiri',serif", direction: 'rtl', fontSize: '1.2rem', minHeight: '60px' }} defaultValue={announcement?.arabic_text || ''} />
-                  </div>
-                  <div className="field span-2">
-                    <label>Translation</label>
-                    <textarea name="english_text" defaultValue={announcement?.english_text || ''} />
-                  </div>
-                  <div className="field span-2">
-                    <label>Weekly Schedule</label>
-                    <textarea name="schedule" rows={5} defaultValue={announcement?.schedule || ''} />
-                  </div>
-                </div>
-                <button className="btn btn-gold" type="submit" style={{ marginTop: '18px' }}>Save Announcement</button>
-              </form>
-            </div>
-          </div>
-        )}
+    <div className="container" style={{ padding: '1rem 0 2rem' }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+        }}
+      >
+        <h2 style={{ fontSize: '1.4rem' }}>Admin Dashboard</h2>
+        <button className="btn btn-danger" onClick={handleLogout}>
+          Logout
+        </button>
       </div>
-    </main>
+
+      {/* Message */}
+      {message && (
+        <div
+          style={{
+            padding: '0.75rem',
+            borderRadius: 'var(--radius-sm)',
+            marginBottom: '1rem',
+            background: message.type === 'success' ? '#e8f5e9' : '#ffebee',
+            color: message.type === 'success' ? '#2e7d32' : '#c62828',
+          }}
+        >
+          {message.text}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.5rem',
+          borderBottom: '2px solid var(--color-border)',
+          marginBottom: '1.5rem',
+          overflowX: 'auto',
+          paddingBottom: '0.25rem',
+        }}
+      >
+        {(['students', 'attendance', 'achievements', 'announcement'] as Tab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '0.5rem 1.25rem',
+              border: 'none',
+              background: 'transparent',
+              fontSize: '0.9rem',
+              fontWeight: activeTab === tab ? '600' : '400',
+              color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              borderBottom: activeTab === tab ? '3px solid var(--color-primary)' : 'none',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== TAB: STUDENTS ===== */}
+      {activeTab === 'students' && (
+        <div>
+          {/* Add Student Form */}
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <h4 style={{ marginBottom: '0.5rem' }}>Add Student</h4>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={newStudentName}
+                onChange={(e) => setNewStudentName(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: '150px',
+                  padding: '0.5rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              />
+              <input
+                type="date"
+                value={newStudentDate}
+                onChange={(e) => setNewStudentDate(e.target.value)}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              />
+              <button className="btn btn-primary" onClick={handleAddStudent}>
+                Add Student
+              </button>
+            </div>
+          </div>
+
+          {/* Student List */}
+          <div className="card">
+            <h4 style={{ marginBottom: '0.5rem' }}>
+              Students ({students.length})
+            </h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                    <th style={{ textAlign: 'left', padding: '0.5rem 0.25rem' }}>ID</th>
+                    <th style={{ textAlign: 'left', padding: '0.5rem 0.25rem' }}>Name</th>
+                    <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Week</th>
+                    <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Active</th>
+                    <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((student) => (
+                    <tr key={student.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ padding: '0.4rem 0.25rem' }}>{student.id}</td>
+                      <td style={{ padding: '0.4rem 0.25rem', wordWrap: 'break-word' }}>
+                        <input
+                          type="text"
+                          defaultValue={student.full_name}
+                          onBlur={(e) => {
+                            if (e.target.value !== student.full_name) {
+                              handleUpdateStudent(student.id, e.target.value, student.joining_week);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.2rem 0.3rem',
+                            border: '1px solid transparent',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'transparent',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = 'var(--color-border)'; }}
+                          onBlur={(e) => { e.target.style.borderColor = 'transparent'; }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="53"
+                          defaultValue={student.joining_week || ''}
+                          style={{ width: '50px', padding: '0.2rem', textAlign: 'center' }}
+                          onBlur={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val !== student.joining_week) {
+                              handleUpdateStudent(student.id, student.full_name, val);
+                            }
+                          }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>
+                        <button
+                          className={`btn ${student.is_active ? 'btn-primary' : 'btn-outline'}`}
+                          style={{ padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}
+                          onClick={() => handleToggleActive(student.id, student.is_active)}
+                        >
+                          {student.is_active ? 'Active' : 'Inactive'}
+                        </button>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>
+                        <button
+                          className="btn btn-outline"
+                          style={{ padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = async (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (!file) return;
+                              // This would call uploadPhoto from actions
+                              showMessage('success', 'Photo upload feature coming soon');
+                            };
+                            input.click();
+                          }}
+                        >
+                          Upload Photo
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TAB: ATTENDANCE ===== */}
+      {activeTab === 'attendance' && (
+        <div>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: '0.9rem' }}>
+              Date:
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                style={{ marginLeft: '0.5rem', padding: '0.3rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}
+              />
+            </label>
+            <button
+              className="btn btn-primary"
+              onClick={handleSaveAttendance}
+              disabled={savingAttendance}
+            >
+              {savingAttendance ? 'Saving...' : 'Save Attendance'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-outline"
+              onClick={() => handleBatchStatus('R')}
+              style={{ background: 'var(--status-recited)', color: '#fff', border: 'none' }}
+            >
+              Selected → R
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => handleBatchStatus('M')}
+              style={{ background: 'var(--status-makeup)', color: '#fff', border: 'none' }}
+            >
+              Selected → M
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => handleBatchStatus('X')}
+              style={{ background: 'var(--status-pending)', color: '#fff', border: 'none' }}
+            >
+              Selected → X
+            </button>
+            <button className="btn btn-outline" onClick={handleSelectAll} style={{ fontSize: '0.8rem' }}>
+              {selectedStudents.size === activeStudents.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', alignSelf: 'center' }}>
+              {selectedStudents.size} selected
+            </span>
+          </div>
+
+          <div className="card">
+            {activeStudents.length === 0 ? (
+              <p style={{ color: 'var(--color-text-muted)' }}>No active students.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {activeStudents.map((student) => (
+                  <div
+                    key={student.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.3rem 0.5rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: selectedStudents.has(student.id) ? 'var(--color-bg)' : 'transparent',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.has(student.id)}
+                      onChange={() => {
+                        const newSet = new Set(selectedStudents);
+                        if (newSet.has(student.id)) {
+                          newSet.delete(student.id);
+                        } else {
+                          newSet.add(student.id);
+                        }
+                        setSelectedStudents(newSet);
+                      }}
+                    />
+                    <span style={{ fontSize: '0.85rem', minWidth: '60px' }}>{student.id}</span>
+                    <span style={{ fontSize: '0.85rem', flex: 1, wordWrap: 'break-word' }}>
+                      {student.full_name}
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      {(['R', 'M', 'X'] as const).map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => handleStatusToggle(student.id, status)}
+                          style={{
+                            padding: '0.2rem 0.6rem',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: attendanceMap[student.id] === status
+                              ? STATUS_COLORS[status]
+                              : 'var(--color-border)',
+                            color: attendanceMap[student.id] === status ? '#fff' : 'var(--color-text-muted)',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: '600',
+                            transition: 'all var(--transition-fast)',
+                          }}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== TAB: ACHIEVEMENTS ===== */}
+      {activeTab === 'achievements' && (
+        <div>
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <h4 style={{ marginBottom: '0.5rem' }}>Add Achievement</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <select
+                  value={achievementStudent}
+                  onChange={(e) => setAchievementStudent(e.target.value)}
+                  style={{ padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', flex: 1, minWidth: '120px' }}
+                >
+                  <option value="">Select Student</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.id} - {s.full_name}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Title (required)"
+                  value={achievementTitle}
+                  onChange={(e) => setAchievementTitle(e.target.value)}
+                  style={{ flex: 2, minWidth: '150px', padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="Description (optional)"
+                  value={achievementDesc}
+                  onChange={(e) => setAchievementDesc(e.target.value)}
+                  style={{ flex: 2, minWidth: '150px', padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="Category (optional)"
+                  value={achievementCategory}
+                  onChange={(e) => setAchievementCategory(e.target.value)}
+                  style={{ flex: 1, minWidth: '100px', padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}
+                />
+                <input
+                  type="date"
+                  value={achievementDate}
+                  onChange={(e) => setAchievementDate(e.target.value)}
+                  style={{ padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}
+                />
+                <button className="btn btn-primary" onClick={handleAddAchievement}>
+                  Add Achievement
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h4 style={{ marginBottom: '0.5rem' }}>
+              Achievements ({achievements.length})
+            </h4>
+            {achievements.length === 0 ? (
+              <p style={{ color: 'var(--color-text-muted)' }}>No achievements recorded.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {achievements.map((ach) => (
+                  <div
+                    key={ach.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.5rem',
+                      borderBottom: '1px solid var(--color-border)',
+                      flexWrap: 'wrap',
+                      gap: '0.25rem',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>
+                        {ach.student_id}: {ach.title}
+                      </span>
+                      {ach.description && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>
+                          {ach.description}
+                        </span>
+                      )}
+                      {ach.category && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>
+                          [{ach.category}]
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      className="btn btn-danger"
+                      style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem' }}
+                      onClick={() => handleDeleteAchievement(ach.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== TAB: ANNOUNCEMENT ===== */}
+      {activeTab === 'announcement' && (
+        <div>
+          {announcement && (
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h4 style={{ marginBottom: '0.5rem' }}>Current Announcement</h4>
+              {announcement.arabic_text && (
+                <div className="arabic" style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>
+                  {announcement.arabic_text}
+                </div>
+              )}
+              {announcement.english_text && (
+                <p style={{ color: 'var(--color-text-muted)' }}>{announcement.english_text}</p>
+              )}
+              {announcement.schedule && (
+                <p style={{ fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                  <strong>Schedule:</strong> {announcement.schedule}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="card">
+            <h4 style={{ marginBottom: '0.5rem' }}>Post New Announcement</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <label style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.15rem' }}>
+                  Arabic Text (RTL)
+                </label>
+                <textarea
+                  value={arabicText}
+                  onChange={(e) => setArabicText(e.target.value)}
+                  dir="rtl"
+                  className="arabic"
+                  style={{
+                    width: '100%',
+                    minHeight: '80px',
+                    padding: '0.5rem',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontFamily: 'var(--font-family-arabic)',
+                    fontSize: '1.1rem',
+                  }}
+                  placeholder="Enter Arabic verse or announcement..."
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.15rem' }}>
+                  English Translation
+                </label>
+                <textarea
+                  value={englishText}
+                  onChange={(e) => setEnglishText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    minHeight: '60px',
+                    padding: '0.5rem',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                  placeholder="Enter English translation..."
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.15rem' }}>
+                  Schedule
+                </label>
+                <textarea
+                  value={scheduleText}
+                  onChange={(e) => setScheduleText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    minHeight: '40px',
+                    padding: '0.5rem',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                  placeholder="Enter weekly schedule..."
+                />
+              </div>
+              <button className="btn btn-primary" onClick={handleSaveAnnouncement}>
+                Save Announcement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+// ============================================
+// MAIN CLIENT COMPONENT
+// ============================================
+
+export default function AdminClient() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const supabaseClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              get(name: string) {
+                const value = document.cookie
+                  .split('; ')
+                  .find((row) => row.startsWith(name + '='))
+                  ?.split('=')[1];
+                return value;
+              },
+            },
+          }
+        );
+        const { data } = await supabaseClient.auth.getSession();
+        setIsLoggedIn(!!data?.session);
+      } catch {
+        setIsLoggedIn(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  if (isLoggedIn === null) {
+    return (
+      <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (isLoggedIn) {
+    return <Dashboard />;
+  }
+
+  return <LoginForm onLogin={() => setIsLoggedIn(true)} />;
 }
