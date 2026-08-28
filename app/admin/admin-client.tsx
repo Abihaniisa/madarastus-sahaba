@@ -12,6 +12,8 @@ import {
   addAchievement,
   deleteAchievement,
   saveAnnouncement,
+  uploadStudentPhoto,
+  uploadFounderPhoto,
   logout,
 } from './actions';
 
@@ -165,16 +167,25 @@ export default function AdminClient({ mode, students, achievements, announcement
                     <p style={{ fontWeight: 600, color: '#1e293b' }}>{student.full_name}</p>
                     <p style={{ fontSize: '12px', color: '#a6947e' }}>{student.id}</p>
                   </div>
-                  <form action={updateStudent} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input type="hidden" name="id" value={student.id} />
-                    <input name="full_name" defaultValue={student.full_name} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', width: '140px', outline: 'none', background: '#fdf9f5' }} />
-                    <input name="joining_week" type="number" min="1" max="53" defaultValue={student.joining_week ?? ''} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', width: '70px', outline: 'none', background: '#fdf9f5' }} />
-                    <select name="is_active" defaultValue={student.is_active ? 'true' : 'false'} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', outline: 'none', background: '#fdf9f5' }}>
-                      <option value="true">Active</option>
-                      <option value="false">Inactive</option>
-                    </select>
-                    <button type="submit" style={{ padding: '8px 16px', borderRadius: '8px', background: '#1a472a', color: 'white', fontSize: '12px', fontWeight: 600, border: 'none' }}>Save</button>
-                  </form>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <form action={uploadStudentPhoto} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <input type="hidden" name="student_id" value={student.id} />
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#1a472a', border: '1px solid #e8dfd6', borderRadius: '999px', padding: '4px 10px', fontWeight: 600 }}>
+                        Photo
+                        <input type="file" name="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) { e.target.form?.requestSubmit(); } }} />
+                      </label>
+                    </form>
+                    <form action={updateStudent} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input type="hidden" name="id" value={student.id} />
+                      <input name="full_name" defaultValue={student.full_name} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', width: '140px', outline: 'none', background: '#fdf9f5' }} />
+                      <input name="joining_week" type="number" min="1" max="53" defaultValue={student.joining_week ?? ''} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', width: '70px', outline: 'none', background: '#fdf9f5' }} />
+                      <select name="is_active" defaultValue={student.is_active ? 'true' : 'false'} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', outline: 'none', background: '#fdf9f5' }}>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                      </select>
+                      <button type="submit" style={{ padding: '8px 16px', borderRadius: '8px', background: '#1a472a', color: 'white', fontSize: '12px', fontWeight: 600, border: 'none' }}>Save</button>
+                    </form>
+                  </div>
                 </div>
               ))}
             </div>
@@ -286,6 +297,14 @@ export default function AdminClient({ mode, students, achievements, announcement
                 )}
               </div>
             )}
+
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b', marginTop: '28px', marginBottom: '12px' }}>Founder Photo</h2>
+            <form action={uploadFounderPhoto} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#1a472a', border: '1px solid #e8dfd6', borderRadius: '999px', padding: '8px 16px', fontWeight: 600 }}>
+                Upload Founder Photo
+                <input type="file" name="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) { e.target.form?.requestSubmit(); } }} />
+              </label>
+            </form>
           </div>
         )}
       </div>
