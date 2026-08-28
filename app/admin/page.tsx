@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { supabaseAdmin } from './admin-server';
 import AdminClient from './admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -20,11 +20,36 @@ export default async function AdminPage() {
     }
   );
 
-  const { data: session } = await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (session?.session) {
-    redirect('/admin');
+  if (!user) {
+    return <AdminClient mode="login" students={[]} achievements={[]} announcement={null} />;
   }
 
-  return <AdminClient />;
+  const { data: students } = await supabaseAdmin
+    .from('students')
+    .select('*')
+    .order('id');
+
+  const { data: achievements } = await supabaseAdmin
+    .from('achievements')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  const { data: announcementData } = await supabaseAdmin
+    .from('announcements')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  return (
+    <AdminClient
+      mode="dashboard"
+      students={students || []}
+      achievements={achievements || []}
+      announcement={announcementData && announcementData.length > 0 ? announcementData[0] : null}
+    />
+  );
 }
