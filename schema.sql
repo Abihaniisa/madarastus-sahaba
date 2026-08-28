@@ -2,7 +2,6 @@
 -- Madrasatus Sahaba Litahfizul Quran
 -- COMPLETE DATABASE RESET + INITIAL DATA
 -- Run in Supabase SQL Editor
--- This drops all old tables first, then creates fresh
 -- ============================================
 
 -- ============================================
@@ -60,6 +59,14 @@ CREATE TABLE public.achievements (
 
 CREATE INDEX idx_achievements_student ON public.achievements(student_id);
 
+CREATE TABLE public.announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  arabic_text TEXT,
+  english_text TEXT,
+  schedule TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ============================================
 -- STEP 3: ROW LEVEL SECURITY
 -- ============================================
@@ -67,17 +74,20 @@ CREATE INDEX idx_achievements_student ON public.achievements(student_id);
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public read students" ON public.students FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Public read attendance" ON public.attendance_records FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Public read achievements" ON public.achievements FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Public read announcements" ON public.announcements FOR SELECT TO anon, authenticated USING (true);
 
 GRANT SELECT ON public.students TO anon, authenticated;
 GRANT SELECT ON public.attendance_records TO anon, authenticated;
 GRANT SELECT ON public.achievements TO anon, authenticated;
+GRANT SELECT ON public.announcements TO anon, authenticated;
 
 -- ============================================
--- STEP 4: STUDENTS (10 total)
+-- STEP 4: STUDENTS (10 total — DO NOT CHANGE)
 -- ============================================
 
 INSERT INTO public.students (id, full_name, joining_date, joining_week) VALUES
@@ -93,7 +103,7 @@ INSERT INTO public.students (id, full_name, joining_date, joining_week) VALUES
 ('MS010', 'Musa Ahmad', '2026-08-10', 5);
 
 -- ============================================
--- STEP 5: ATTENDANCE RECORDS
+-- STEP 5: ATTENDANCE RECORDS (13 July – 26 August 2026 — DO NOT CHANGE)
 -- ============================================
 
 -- Week 1 (13-16 July 2026)
@@ -141,22 +151,3 @@ INSERT INTO public.attendance_records (student_id, date, status) VALUES
 ('MS001', '2026-08-24', 'R'), ('MS002', '2026-08-24', 'X'), ('MS003', '2026-08-24', 'R'), ('MS004', '2026-08-24', 'R'), ('MS005', '2026-08-24', 'M'), ('MS006', '2026-08-24', 'X'), ('MS007', '2026-08-24', 'R'), ('MS008', '2026-08-24', 'R'), ('MS009', '2026-08-24', 'R'), ('MS010', '2026-08-24', 'R'),
 ('MS001', '2026-08-25', 'R'), ('MS002', '2026-08-25', 'X'), ('MS003', '2026-08-25', 'R'), ('MS004', '2026-08-25', 'X'), ('MS005', '2026-08-25', 'M'), ('MS006', '2026-08-25', 'X'), ('MS007', '2026-08-25', 'X'), ('MS008', '2026-08-25', 'R'), ('MS009', '2026-08-25', 'X'), ('MS010', '2026-08-25', 'R'),
 ('MS001', '2026-08-26', 'R'), ('MS002', '2026-08-26', 'X'), ('MS003', '2026-08-26', 'X'), ('MS004', '2026-08-26', 'X'), ('MS005', '2026-08-26', 'R'), ('MS006', '2026-08-26', 'X'), ('MS007', '2026-08-26', 'X'), ('MS008', '2026-08-26', 'X'), ('MS009', '2026-08-26', 'X'), ('MS010', '2026-08-26', 'R');
-
-
--- ============================================
--- ANNOUNCEMENTS TABLE
--- ============================================
-
-CREATE TABLE IF NOT EXISTS public.announcements (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  arabic_text TEXT,
-  english_text TEXT,
-  schedule TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read announcements" ON public.announcements FOR SELECT TO anon, authenticated USING (true);
-
-GRANT SELECT ON public.announcements TO anon, authenticated;

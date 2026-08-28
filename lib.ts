@@ -1,27 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 
+// ============================================
+// SCHOOL CONFIGURATION
+// ============================================
+
 export const SCHOOL = {
   name: 'Madrasatus Sahaba Litahfizul Quran',
   shortName: 'Madrasatus Sahaba',
-  tagline: 'Center of Quranic Memorization and Islamic Learning',
+  tagline: 'Preserving the Quran, One Recitation at a Time',
   description:
-    'Madrasatus Sahaba Litahfizul Quran is a center dedicated to the memorization of the Holy Quran and the study of Islamic sciences. Our students engage in daily recitation, guided learning, and the development of strong moral character.',
+    'A dedicated institution for Quran memorization and recitation, nurturing students in the art of Quranic recitation with proper tajweed.',
 };
+
+// ============================================
+// FOUNDER CONFIGURATION
+// ============================================
 
 export const FOUNDER = {
   name: 'Sheikh Abdullahi Babayo',
   title: 'Founder & Spiritual Guide',
   history:
-    'Sheikh Abdullahi Babayo is a devoted scholar and educator who has dedicated his life to the teaching of the Quran and Islamic knowledge. He established Madrasatus Sahaba Litahfizul Quran to provide authentic, structured, and accessible Quranic education to students from all backgrounds.',
+    'Sheikh Abdullahi Babayo founded Madrasatus Sahaba with a vision to create a center of excellence for Quran memorization. With decades of experience in Islamic education, he has guided countless students on their journey to becoming Huffaz.',
 };
 
-export const STATUS_LABELS: Record<string, { label: string; emoji: string }> = {
-  R: { label: 'Recited', emoji: '✅' },
-  M: { label: 'Makeup', emoji: '🔄' },
-  X: { label: 'Pending', emoji: '⏳' },
-};
+// ============================================
+// STATUS LABELS & COLORS
+// ============================================
 
-export type RecitationStatus = 'R' | 'M' | 'X';
+export const STATUS_LABELS = {
+  R: 'Recited',
+  M: 'Makeup',
+  X: 'Pending',
+} as const;
+
+export const STATUS_COLORS = {
+  R: 'var(--status-recited)',
+  M: 'var(--status-makeup)',
+  X: 'var(--status-pending)',
+} as const;
+
+export type Status = 'R' | 'M' | 'X';
+
+// ============================================
+// TYPE DEFINITIONS
+// ============================================
 
 export interface Student {
   id: string;
@@ -38,7 +60,7 @@ export interface AttendanceRecord {
   id: string;
   student_id: string;
   date: string;
-  status: RecitationStatus;
+  status: Status;
   created_at: string;
   updated_at: string;
 }
@@ -53,87 +75,263 @@ export interface Achievement {
   created_at: string;
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+export interface Announcement {
+  id: string;
+  arabic_text: string | null;
+  english_text: string | null;
+  schedule: string | null;
+  created_at: string;
+}
+
+export interface StudentStats {
+  total: number;
+  recited: number;
+  makeup: number;
+  pending: number;
+  recitationRate: number;
+  completionRate: number;
+}
+
+export interface WeeklyBreakdown {
+  week: number;
+  days: {
+    date: string;
+    status: Status | null;
+  }[];
+  rate: number;
+}
+
+// ============================================
+// CALCULATION FUNCTIONS
+// ============================================
+
+const SCHOOL_START_DATE = new Date('2026-07-13');
+
+export function getSchoolWeek(date: Date): number {
+  const diff = date.getTime() - SCHOOL_START_DATE.getTime();
+  return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
+}
+
+export function getWeekStartDate(week: number): Date {
+  const start = new Date(SCHOOL_START_DATE);
+  start.setDate(start.getDate() + (week - 1) * 7);
+  return start;
+}
+
+export function calculateStats(records: AttendanceRecord[]): StudentStats {
+  const recited = records.filter((r) => r.status === 'R').length;
+  const makeup = records.filter((r) => r.status === 'M').length;
+  const pending = records.filter((r) => r.status === 'X').length;
+  const total = records.length;
+
+  return {
+    total,
+    recited,
+    makeup,
+    pending,
+    recitationRate: total > 0 ? (recited / total) * 100 : 0,
+    completionRate: total > 0 ? ((recited + makeup) / total) * 100 : 0,
+  };
+}
+
+export function getWeeklyBreakdown(
+  records: AttendanceRecord[],
+  studentJoiningWeek: number | null
+): WeeklyBreakdown[] {
+  const weeks: WeeklyBreakdown[] = [];
+  const now = new Date();
+  const currentWeek = getSchoolWeek(now);
+
+  if (!studentJoiningWeek) return weeks;
+
+  for (let w = studentJoiningWeek; w <= currentWeek; w++) {
+    const weekStart = getWeekStartDate(w);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    const days = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + d);
+      const dateStr = date.toISOString().split('T')[0];
+      const record = records.find((r) => r.date === dateStr);
+      days.push({
+        date: dateStr,
+        status: record ? record.status : null,
+      });
+    }
+
+    const validDays = days.filter(
+      (d) => d.status && ['R', 'M', 'X'].includes(d.status)
+    );
+    const recitedDays = days.filter((d) => d.status === 'R').length;
+    const rate = validDays.length > 0 ? (recitedDays / validDays.length) * 100 : 0;
+
+    weeks.push({
+      week: w,
+      days,
+      rate,
+    });
+  }
+
+  return weeks;
+}
+
+export function getApplicableRecords(
+  records: AttendanceRecord[],
+  joiningDate: string | null
+): AttendanceRecord[] {
+  if (!joiningDate) return [];
+  return records.filter((r) => r.date >= joiningDate);
+}
+
+// ============================================
+// SUPABASE CLIENT (ANON)
+// ============================================
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const SCHOOL_START = '2026-07-13';
+// ============================================
+// DATA FETCHING FUNCTIONS
+// ============================================
 
-export function getSchoolWeek(dateStr: string): number {
-  const start = new Date(SCHOOL_START + 'T00:00:00Z');
-  const date = new Date(dateStr + 'T00:00:00Z');
-  const diffDays = Math.floor((date.getTime() - start.getTime()) / 86400000);
-  if (diffDays < 0) return 0;
-  return Math.floor(diffDays / 7) + 1;
+export async function getStudents(): Promise<Student[]> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .order('id');
+
+  if (error) {
+    console.error('Error fetching students:', error);
+    return [];
+  }
+
+  return data || [];
 }
 
-export function deduplicate(records: AttendanceRecord[]): AttendanceRecord[] {
-  const seen = new Set<string>();
-  const result: AttendanceRecord[] = [];
-  for (const r of records) {
-    const key = `${r.student_id}:${r.date}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(r);
-    }
+export async function getActiveStudents(): Promise<Student[]> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('is_active', true)
+    .order('id');
+
+  if (error) {
+    console.error('Error fetching active students:', error);
+    return [];
   }
-  return result;
+
+  return data || [];
 }
 
-export function getApplicable(records: AttendanceRecord[], student: Student): AttendanceRecord[] {
-  const deduped = deduplicate(records);
-  const today = new Date().toISOString().slice(0, 10);
-  const notFuture = deduped.filter((r) => r.date <= today);
-  if (student.joining_date !== null) {
-    return notFuture.filter((r) => r.date >= student.joining_date!);
+export async function getStudent(id: string): Promise<Student | null> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching student:', error);
+    return null;
   }
-  if (student.joining_week !== null) {
-    return notFuture.filter((r) => getSchoolWeek(r.date) >= student.joining_week!);
-  }
-  return notFuture;
+
+  return data;
 }
 
-export function calculateStats(records: AttendanceRecord[], student: Student) {
-  const applicable = getApplicable(records, student);
-  let r = 0;
-  let m = 0;
-  let x = 0;
-  for (const rec of applicable) {
-    if (rec.status === 'R') r++;
-    else if (rec.status === 'M') m++;
-    else x++;
+export async function getAttendance(): Promise<AttendanceRecord[]> {
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('*');
+
+  if (error) {
+    console.error('Error fetching attendance:', error);
+    return [];
   }
-  const total = r + m + x;
-  const attendance = total > 0 ? Math.round((r / total) * 10000) / 100 : 0;
-  const completion = total > 0 ? Math.round(((r + m) / total) * 10000) / 100 : 0;
-  return { total, r, m, x, attendance, completion };
+
+  return data || [];
 }
 
-export function getWeekly(records: AttendanceRecord[], student: Student) {
-  const applicable = getApplicable(records, student);
-  const weeks = new Map<number, { r: number; m: number; x: number; emojis: string }>();
-  for (const rec of applicable) {
-    const week = getSchoolWeek(rec.date);
-    if (!weeks.has(week)) weeks.set(week, { r: 0, m: 0, x: 0, emojis: '' });
-    const w = weeks.get(week)!;
-    if (rec.status === 'R') {
-      w.r++;
-      w.emojis += '✅';
-    } else if (rec.status === 'M') {
-      w.m++;
-      w.emojis += '🔄';
-    } else {
-      w.x++;
-      w.emojis += '⏳';
-    }
+export async function getAttendanceByStudent(
+  studentId: string
+): Promise<AttendanceRecord[]> {
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('date');
+
+  if (error) {
+    console.error('Error fetching attendance for student:', error);
+    return [];
   }
-  const result: Array<{ week: number; r: number; m: number; x: number; emojis: string; attendance: number }> = [];
-  for (const [week, data] of weeks) {
-    const total = data.r + data.m + data.x;
-    const attendance = total > 0 ? Math.round((data.r / total) * 10000) / 100 : 0;
-    result.push({ week, ...data, attendance });
+
+  return data || [];
+}
+
+export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('*')
+    .eq('date', date);
+
+  if (error) {
+    console.error('Error fetching attendance for date:', error);
+    return [];
   }
-  result.sort((a, b) => a.week - b.week);
-  return result;
+
+  return data || [];
+}
+
+export async function getAchievements(): Promise<Achievement[]> {
+  const { data, error } = await supabase
+    .from('achievements')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching achievements:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getAchievementsByStudent(
+  studentId: string
+): Promise<Achievement[]> {
+  const { data, error } = await supabase
+    .from('achievements')
+    .select('*')
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching achievements for student:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getLatestAnnouncement(): Promise<Announcement | null> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error('Error fetching announcement:', error);
+    return null;
+  }
+
+  return data && data.length > 0 ? data[0] : null;
 }
