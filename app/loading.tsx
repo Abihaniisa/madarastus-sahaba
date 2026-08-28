@@ -1,11 +1,22 @@
 export default function Loading() {
   return (
-    <main style={{ minHeight: '100vh', background: '#fdf9f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '400px', padding: '20px' }}>
-        <div style={{ height: '16px', background: '#f0e4d8', borderRadius: '8px', width: '60%', animation: 'pulse 1.5s infinite' }} />
-        <div style={{ height: '16px', background: '#f0e4d8', borderRadius: '8px', width: '80%', animation: 'pulse 1.5s infinite' }} />
-        <div style={{ height: '16px', background: '#f0e4d8', borderRadius: '8px', width: '40%', animation: 'pulse 1.5s infinite' }} />
-        <style>{`@keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }`}</style>
+    <main style={{ minHeight: '100vh', background: '#fdf9f5', padding: '20px' }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div className="skeleton" style={{ height: '40px', width: '50%', marginBottom: '20px' }} />
+        <div className="skeleton" style={{ height: '16px', width: '80%', marginBottom: '8px' }} />
+        <div className="skeleton" style={{ height: '16px', width: '60%', marginBottom: '20px' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', borderRadius: '12px', padding: '12px' }}>
+              <div className="skeleton" style={{ width: '44px', height: '44px', borderRadius: '50%' }} />
+              <div style={{ flex: 1 }}>
+                <div className="skeleton" style={{ height: '16px', width: '70%', marginBottom: '6px' }} />
+                <div className="skeleton" style={{ height: '12px', width: '40%' }} />
+              </div>
+              <div className="skeleton" style={{ width: '40px', height: '16px' }} />
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   );
