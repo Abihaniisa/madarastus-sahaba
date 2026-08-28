@@ -16,9 +16,9 @@ export const FOUNDER = {
 };
 
 export const STATUS_LABELS: Record<string, { label: string; emoji: string }> = {
-  R: { label: 'Recited', emoji: '✅' },
-  M: { label: 'Makeup', emoji: '🔄' },
-  X: { label: 'Pending', emoji: '⏳' },
+  R: { label: 'Recited', emoji: '' },
+  M: { label: 'Makeup', emoji: '' },
+  X: { label: 'Pending', emoji: '' },
 };
 
 export type RecitationStatus = 'R' | 'M' | 'X';
@@ -112,23 +112,16 @@ export function calculateStats(records: AttendanceRecord[], student: Student) {
 
 export function getWeekly(records: AttendanceRecord[], student: Student) {
   const applicable = getApplicable(records, student);
-  const weeks = new Map<number, { r: number; m: number; x: number; emojis: string }>();
+  const weeks = new Map<number, { r: number; m: number; x: number }>();
   for (const rec of applicable) {
     const week = getSchoolWeek(rec.date);
-    if (!weeks.has(week)) weeks.set(week, { r: 0, m: 0, x: 0, emojis: '' });
+    if (!weeks.has(week)) weeks.set(week, { r: 0, m: 0, x: 0 });
     const w = weeks.get(week)!;
-    if (rec.status === 'R') {
-      w.r++;
-      w.emojis += '✅';
-    } else if (rec.status === 'M') {
-      w.m++;
-      w.emojis += '🔄';
-    } else {
-      w.x++;
-      w.emojis += '⏳';
-    }
+    if (rec.status === 'R') w.r++;
+    else if (rec.status === 'M') w.m++;
+    else w.x++;
   }
-  const result: Array<{ week: number; r: number; m: number; x: number; emojis: string; attendance: number }> = [];
+  const result: Array<{ week: number; r: number; m: number; x: number; attendance: number }> = [];
   for (const [week, data] of weeks) {
     const total = data.r + data.m + data.x;
     const attendance = total > 0 ? Math.round((data.r / total) * 10000) / 100 : 0;
