@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase, SCHOOL, FOUNDER, calculateStats } from '../lib';
 import type { Student, AttendanceRecord } from '../lib';
-import AvatarViewer from './student/avatar-viewer';
 
 export default function HomePage() {
   const [students, setStudents] = useState<any[]>([]);
@@ -12,8 +11,6 @@ export default function HomePage() {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [announcement, setAnnouncement] = useState<any>(null);
-  const [founderPhotoUrl, setFounderPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -42,18 +39,33 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    async function load() {
-      const [studentsRes, attendanceRes, announcementRes, schoolConfigRes] = await Promise.all([
-        supabase.from('students').select('*').eq('is_active', true).order('id'),
-        supabase.from('attendance_records').select('*').order('date'),
-        supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(1),
-        supabase.from('school_config').select('founder_photo_url').eq('id', 'default').single(),
-      ]);
+    async function loadStudents() {
+      const { data: studentsData } = await supabase
+        .from('students')
+        .select('*')
+        .eq('is_active', true)
+        .order('id');
 
-      const studentsList = studentsRes.data || [];
-      const attendance = attendanceRes.data || [];
+      const studentsList = studentsData || [];
+      setStudents(studentsList);
+      setLoading(false);
+    }
 
-      const withStats = studentsList.map((student: Student) => {
+    loadStudents();
+  }, []);
+
+  useEffect(() => {
+    async function loadStats() {
+      if (students.length === 0) return;
+
+      const { data: attendanceData } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .order('date');
+
+      const attendance = attendanceData || [];
+
+      const withStats = students.map((student: Student) => {
         const studentAttendance = attendance.filter(
           (r: AttendanceRecord) => r.student_id === student.id
         );
@@ -62,16 +74,10 @@ export default function HomePage() {
       });
 
       setStudents(withStats);
-      if (announcementRes.data && announcementRes.data.length > 0) {
-        setAnnouncement(announcementRes.data[0]);
-      }
-      if (schoolConfigRes.data?.founder_photo_url) {
-        setFounderPhotoUrl(schoolConfigRes.data.founder_photo_url);
-      }
-      setLoading(false);
     }
-    load();
-  }, []);
+
+    loadStats();
+  }, [students.length]);
 
   const togglePin = (id: string) => {
     const newPinned = pinnedIds.includes(id)
@@ -134,40 +140,7 @@ export default function HomePage() {
           </div>
         )}
 
-        <section style={{ marginTop: '16px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
-          {announcement ? (
-            <div>
-              {announcement.arabic_text && (
-                <p style={{ fontFamily: "'Amiri', 'Noto Naskh Arabic', serif", direction: 'rtl', textAlign: 'right', fontSize: '20px', lineHeight: 2, color: '#1a472a' }}>
-                  {announcement.arabic_text}
-                </p>
-              )}
-              {announcement.english_text && (
-                <p style={{ marginTop: '12px', fontSize: '14px', lineHeight: 1.7, color: '#475569' }}>
-                  {announcement.english_text}
-                </p>
-              )}
-              {announcement.schedule && (
-                <div style={{ marginTop: '12px', background: '#fdf9f5', borderRadius: '10px', padding: '14px' }}>
-                  <p style={{ fontSize: '13px', lineHeight: 1.7, color: '#475569', whiteSpace: 'pre-wrap' }}>
-                    {announcement.schedule}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '12px 0' }}>
-              <p style={{ fontSize: '15px', fontWeight: 600, color: '#1a472a' }}>
-                Weekly Recitation Schedule
-              </p>
-              <p style={{ fontSize: '13px', color: '#a6947e', marginTop: '6px' }}>
-                No announcement has been posted yet. Please check back later.
-              </p>
-            </div>
-          )}
-        </section>
-
-        <section style={{ marginTop: '24px' }}>
+        <section style={{ marginTop: '16px' }}>
           <p style={{ color: '#6b5a4a', fontSize: 'clamp(0.875rem, 2.5vw, 0.95rem)', lineHeight: 1.7 }}>
             {SCHOOL.description}
           </p>
@@ -184,17 +157,26 @@ export default function HomePage() {
               <p style={{ color: '#a6947e', fontSize: '14px' }}>No students yet.</p>
             </div>
           ) : (
-            <div>
+            <div style={{ background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
               {sorted.map((student) => {
                 const firstLetter = student.full_name.charAt(0).toUpperCase();
                 const isPinned = pinnedIds.includes(student.id);
                 return (
-                  <div key={student.id} className="student-card">
+                  <div key={student.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid #f5efe8' }}>
                     <button
                       onClick={() => togglePin(student.id)}
-                      className={`pin-btn ${isPinned ? 'pinned' : ''}`}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        border: '1px solid #e8dfd6',
+                        background: isPinned ? '#f0e4d8' : 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
                       aria-label={isPinned ? 'Unpin' : 'Pin'}
-                      title={isPinned ? 'Unpin' : 'Pin to top'}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? '#1a472a' : 'none'} stroke={isPinned ? '#1a472a' : '#a6947e'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="12" y1="17" x2="12" y2="22" />
@@ -218,7 +200,7 @@ export default function HomePage() {
                     </Link>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <p style={{ fontWeight: 700, color: '#1a472a', fontSize: '15px' }}>
-                        {student.stats.attendance}%
+                        {student.stats ? `${student.stats.attendance}%` : '—'}
                       </p>
                       <p style={{ fontSize: '10px', color: '#a6947e' }}>
                         Recitation
@@ -237,13 +219,9 @@ export default function HomePage() {
         <section style={{ marginTop: '32px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1a472a' }}>Our Founder</h2>
           <div style={{ marginTop: '14px' }}>
-            <AvatarViewer
-              src={founderPhotoUrl}
-              initial={FOUNDER.name.charAt(0)}
-              name={FOUNDER.name}
-              size={100}
-              shape="circle"
-            />
+            <div style={{ width: '100px', height: '100px', margin: '0 auto', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', fontWeight: 700 }}>
+              {FOUNDER.name.charAt(0)}
+            </div>
           </div>
           <h3 style={{ marginTop: '14px', fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{FOUNDER.name}</h3>
           <p style={{ fontSize: '13px', color: '#c9a94e', fontWeight: 600, marginTop: '2px' }}>{FOUNDER.title}</p>
