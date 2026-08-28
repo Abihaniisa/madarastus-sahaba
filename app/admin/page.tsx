@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { supabaseAdmin } from './admin-server';
 import AdminClient from './admin-client';
 
@@ -26,7 +25,7 @@ export default async function AdminPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/admin/login');
+    return <AdminClient mode="login" students={[]} achievements={[]} announcement={null} />;
   }
 
   const { data: students } = await supabaseAdmin
