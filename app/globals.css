@@ -60,45 +60,7 @@ button {
   cursor: pointer;
 }
 
-/* ============ CLICKABLE STUDENT CARD ============ */
-.student-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid #e8dfd6;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  background: white;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.student-card:hover {
-  border-color: #c9a94e;
-  background: #fdf9f5;
-}
-
-/* ============ PIN BUTTON ============ */
-.pin-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid #e8dfd6;
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.pin-btn.pinned {
-  background: #f0e4d8;
-  border-color: #c9a94e;
-}
-
-/* ============ FOOTER PILL LINKS ============ */
+/* Footer pill links */
 .footer-link-btn {
   display: inline-block;
   padding: 8px 16px;
@@ -115,33 +77,4 @@ button {
 .footer-link-btn:hover {
   border-color: #c9a94e;
   background: #fdf9f5;
-}
-
-/* ============ EXPANDABLE AVATAR OVERLAY ============ */
-.avatar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  padding: 20px;
-}
-
-.avatar-overlay img {
-  max-width: 80%;
-  max-height: 80%;
-  object-fit: contain;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.avatar-overlay img.full {
-  max-width: 100%;
-  max-height: 100%;
 }
