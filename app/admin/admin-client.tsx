@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { SCHOOL } from '../../lib';
@@ -13,7 +13,7 @@ import {
   deleteAchievement,
   saveAnnouncement,
   uploadStudentPhoto,
-  uploadFounderPhoto,
+  removeStudentPhoto,
   logout,
 } from './actions';
 
@@ -35,6 +35,9 @@ export default function AdminClient({ mode, students, achievements, announcement
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [previewFiles, setPreviewFiles] = useState<Record<string, File | null>>({});
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   if (mode === 'login') {
     const supabase = createBrowserClient(
@@ -127,6 +130,71 @@ export default function AdminClient({ mode, students, achievements, announcement
     router.refresh();
   };
 
+  const handlePhotoSelect = (studentId: string, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Only image files are allowed.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be under 5MB.');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewFiles((prev) => ({ ...prev, [studentId]: file }));
+    setPreviewUrls((prev) => ({ ...prev, [studentId]: url }));
+    setError('');
+  };
+
+  const cancelPhoto = (studentId: string) => {
+    const url = previewUrls[studentId];
+    if (url) URL.revokeObjectURL(url);
+    setPreviewFiles((prev) => ({ ...prev, [studentId]: null }));
+    setPreviewUrls((prev) => ({ ...prev, [studentId]: '' }));
+    if (fileInputRefs.current[studentId]) {
+      fileInputRefs.current[studentId]!.value = '';
+    }
+  };
+
+  const savePhoto = async (studentId: string) => {
+    const file = previewFiles[studentId];
+    if (!file) return;
+    setError('');
+    setMessage('Uploading photo...');
+    const formData = new FormData();
+    formData.append('student_id', studentId);
+    formData.append('file', file);
+    const result = await uploadStudentPhoto(formData);
+    if (result?.error) {
+      setError(result.error);
+      setMessage('');
+    } else {
+      setMessage('Photo uploaded successfully.');
+      const url = previewUrls[studentId];
+      if (url) URL.revokeObjectURL(url);
+      setPreviewFiles((prev) => ({ ...prev, [studentId]: null }));
+      setPreviewUrls((prev) => ({ ...prev, [studentId]: '' }));
+      if (fileInputRefs.current[studentId]) {
+        fileInputRefs.current[studentId]!.value = '';
+      }
+      router.refresh();
+    }
+  };
+
+  const removePhoto = async (studentId: string) => {
+    setError('');
+    setMessage('Removing photo...');
+    const formData = new FormData();
+    formData.append('student_id', studentId);
+    const result = await removeStudentPhoto(formData);
+    if (result?.error) {
+      setError(result.error);
+      setMessage('');
+    } else {
+      setMessage('Photo removed.');
+      router.refresh();
+    }
+  };
+
   return (
     <main style={{ minHeight: '100vh', background: '#fdf9f5' }}>
       <header style={{ background: 'linear-gradient(135deg, #1a472a, #2c6a56)', color: 'white', padding: '20px 0' }}>
@@ -162,19 +230,47 @@ export default function AdminClient({ mode, students, achievements, announcement
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#1e293b', marginTop: '28px', marginBottom: '16px' }}>Existing Students</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {students.map((student) => (
-                <div key={student.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f5efe8', flexWrap: 'wrap', gap: '10px' }}>
-                  <div>
+                <div key={student.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f5efe8', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
                     <p style={{ fontWeight: 600, color: '#1e293b' }}>{student.full_name}</p>
                     <p style={{ fontSize: '12px', color: '#a6947e' }}>{student.id}</p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <form action={uploadStudentPhoto} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <input type="hidden" name="student_id" value={student.id} />
-                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#1a472a', border: '1px solid #e8dfd6', borderRadius: '999px', padding: '4px 10px', fontWeight: 600 }}>
-                        Photo
-                        <input type="file" name="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) { e.target.form?.requestSubmit(); } }} />
-                      </label>
-                    </form>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                    {/* Photo preview and upload */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {previewUrls[student.id] ? (
+                        <img src={previewUrls[student.id]} alt="Preview" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : student.photo_url ? (
+                        <img src={student.photo_url} alt="Current" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{student.full_name.charAt(0)}</div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        ref={(el) => { fileInputRefs.current[student.id] = el; }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handlePhotoSelect(student.id, file);
+                        }}
+                      />
+                      {previewUrls[student.id] ? (
+                        <>
+                          <button onClick={() => savePhoto(student.id)} style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#1a472a', color: 'white', fontWeight: 600 }}>Save Photo</button>
+                          <button onClick={() => cancelPhoto(student.id)} style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e8dfd6', background: 'white', color: '#475569', fontWeight: 600 }}>Cancel</button>
+                        </>
+                      ) : (
+                        <button onClick={() => fileInputRefs.current[student.id]?.click()} style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e8dfd6', background: 'white', color: '#1a472a', fontWeight: 600 }}>
+                          {student.photo_url ? 'Change Photo' : 'Upload Photo'}
+                        </button>
+                      )}
+                      {student.photo_url && !previewUrls[student.id] && (
+                        <button onClick={() => removePhoto(student.id)} style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontWeight: 600 }}>Remove</button>
+                      )}
+                    </div>
+
+                    {/* Edit form */}
                     <form action={updateStudent} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input type="hidden" name="id" value={student.id} />
                       <input name="full_name" defaultValue={student.full_name} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e8dfd6', fontSize: '13px', width: '140px', outline: 'none', background: '#fdf9f5' }} />
@@ -281,29 +377,6 @@ export default function AdminClient({ mode, students, achievements, announcement
               <textarea name="english_text" placeholder="English text (optional)" rows={3} style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6', fontSize: '15px', outline: 'none', background: '#fdf9f5' }} />
               <textarea name="schedule" placeholder="Schedule (e.g., Monday: Verses 1-4)" rows={5} style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6', fontSize: '15px', outline: 'none', background: '#fdf9f5' }} />
               <button type="submit" style={{ padding: '12px', borderRadius: '999px', background: '#1a472a', color: 'white', fontWeight: 700, border: 'none' }}>Post Announcement</button>
-            </form>
-
-            {announcement && (
-              <div style={{ marginTop: '24px', padding: '16px', background: '#fdf9f5', borderRadius: '12px' }}>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>Current Announcement:</p>
-                {announcement.arabic_text && (
-                  <p style={{ fontFamily: 'Amiri, serif', direction: 'rtl', textAlign: 'right', fontSize: '18px', lineHeight: 2 }}>{announcement.arabic_text}</p>
-                )}
-                {announcement.english_text && (
-                  <p style={{ fontSize: '14px', color: '#6b5a4a', marginTop: '8px' }}>{announcement.english_text}</p>
-                )}
-                {announcement.schedule && (
-                  <p style={{ fontSize: '14px', color: '#6b5a4a', marginTop: '8px', whiteSpace: 'pre-wrap' }}>{announcement.schedule}</p>
-                )}
-              </div>
-            )}
-
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b', marginTop: '28px', marginBottom: '12px' }}>Founder Photo</h2>
-            <form action={uploadFounderPhoto} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#1a472a', border: '1px solid #e8dfd6', borderRadius: '999px', padding: '8px 16px', fontWeight: 600 }}>
-                Upload Founder Photo
-                <input type="file" name="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) { e.target.form?.requestSubmit(); } }} />
-              </label>
             </form>
           </div>
         )}

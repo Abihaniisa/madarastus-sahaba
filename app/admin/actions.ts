@@ -182,7 +182,13 @@ export async function uploadStudentPhoto(formData: FormData) {
   const file = formData.get('file') as File;
 
   if (!student_id || !file || file.size === 0) {
-    redirect('/admin');
+    return { error: 'Missing student or file.' };
+  }
+  if (!file.type.startsWith('image/')) {
+    return { error: 'Only image files are allowed.' };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: 'Image size must be under 5MB.' };
   }
 
   const fileExt = file.name.split('.').pop() || 'jpg';
@@ -195,51 +201,59 @@ export async function uploadStudentPhoto(formData: FormData) {
     .upload(fileName, buffer, { upsert: true, contentType: file.type });
 
   if (uploadError) {
-    redirect('/admin');
+    return { error: uploadError.message };
   }
 
   const { data: urlData } = supabaseAdmin.storage
     .from('student-photos')
     .getPublicUrl(fileName);
 
-  await supabaseAdmin
+  const { error: updateError } = await supabaseAdmin
     .from('students')
     .update({ photo_url: urlData.publicUrl })
     .eq('id', student_id);
 
-  redirect('/admin');
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  return { success: true, photoUrl: urlData.publicUrl };
 }
 
-export async function uploadFounderPhoto(formData: FormData) {
+export async function removeStudentPhoto(formData: FormData) {
   await requireAdmin();
-  const file = formData.get('file') as File;
+  const student_id = formData.get('student_id') as string;
 
-  if (!file || file.size === 0) {
-    redirect('/admin');
+  if (!student_id) {
+    return { error: 'Missing student.' };
   }
 
-  const fileExt = file.name.split('.').pop() || 'jpg';
-  const fileName = `founder/founder.${fileExt}`;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const { data: student } = await supabaseAdmin
+    .from('students')
+    .select('photo_url')
+    .eq('id', student_id)
+    .single();
 
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from('student-photos')
-    .upload(fileName, buffer, { upsert: true, contentType: file.type });
-
-  if (uploadError) {
-    redirect('/admin');
+  if (student?.photo_url) {
+    const url = student.photo_url;
+    const path = url.split('/').pop();
+    if (path) {
+      await supabaseAdmin.storage
+        .from('student-photos')
+        .remove([`students/${path}`]);
+    }
   }
 
-  const { data: urlData } = supabaseAdmin.storage
-    .from('student-photos')
-    .getPublicUrl(fileName);
+  const { error } = await supabaseAdmin
+    .from('students')
+    .update({ photo_url: null })
+    .eq('id', student_id);
 
-  await supabaseAdmin
-    .from('school_config')
-    .upsert({ id: 'default', founder_photo_url: urlData.publicUrl }, { onConflict: 'id' });
+  if (error) {
+    return { error: error.message };
+  }
 
-  redirect('/admin');
+  return { success: true };
 }
 
 export async function logout() {
