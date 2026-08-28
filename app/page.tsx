@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase, SCHOOL, FOUNDER, calculateStats } from '../lib';
 import type { Student, AttendanceRecord } from '../lib';
+import AvatarViewer from './student/avatar-viewer';
 
 export default function HomePage() {
   const [students, setStudents] = useState<any[]>([]);
@@ -12,6 +13,7 @@ export default function HomePage() {
   const [showInstall, setShowInstall] = useState(false);
   const [loading, setLoading] = useState(true);
   const [announcement, setAnnouncement] = useState<any>(null);
+  const [founderPhotoUrl, setFounderPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -41,10 +43,11 @@ export default function HomePage() {
 
   useEffect(() => {
     async function load() {
-      const [studentsRes, attendanceRes, announcementRes] = await Promise.all([
+      const [studentsRes, attendanceRes, announcementRes, schoolConfigRes] = await Promise.all([
         supabase.from('students').select('*').eq('is_active', true).order('id'),
         supabase.from('attendance_records').select('*').order('date'),
         supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(1),
+        supabase.from('school_config').select('founder_photo_url').eq('id', 'default').single(),
       ]);
 
       const studentsList = studentsRes.data || [];
@@ -61,6 +64,9 @@ export default function HomePage() {
       setStudents(withStats);
       if (announcementRes.data && announcementRes.data.length > 0) {
         setAnnouncement(announcementRes.data[0]);
+      }
+      if (schoolConfigRes.data?.founder_photo_url) {
+        setFounderPhotoUrl(schoolConfigRes.data.founder_photo_url);
       }
       setLoading(false);
     }
@@ -178,26 +184,15 @@ export default function HomePage() {
               <p style={{ color: '#a6947e', fontSize: '14px' }}>No students yet.</p>
             </div>
           ) : (
-            <div style={{ background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
+            <div>
               {sorted.map((student) => {
                 const firstLetter = student.full_name.charAt(0).toUpperCase();
                 const isPinned = pinnedIds.includes(student.id);
                 return (
-                  <div key={student.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid #f5efe8', transition: 'background 0.2s' }}>
+                  <div key={student.id} className="student-card">
                     <button
                       onClick={() => togglePin(student.id)}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        background: isPinned ? '#f0e4d8' : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '14px',
-                        flexShrink: 0,
-                      }}
+                      className={`pin-btn ${isPinned ? 'pinned' : ''}`}
                       aria-label={isPinned ? 'Unpin' : 'Pin'}
                       title={isPinned ? 'Unpin' : 'Pin to top'}
                     >
@@ -242,9 +237,13 @@ export default function HomePage() {
         <section style={{ marginTop: '32px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1a472a' }}>Our Founder</h2>
           <div style={{ marginTop: '14px' }}>
-            <div style={{ width: '100px', height: '100px', margin: '0 auto', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', fontWeight: 700 }}>
-              {FOUNDER.name.charAt(0)}
-            </div>
+            <AvatarViewer
+              src={founderPhotoUrl}
+              initial={FOUNDER.name.charAt(0)}
+              name={FOUNDER.name}
+              size={100}
+              shape="circle"
+            />
           </div>
           <h3 style={{ marginTop: '14px', fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{FOUNDER.name}</h3>
           <p style={{ fontSize: '13px', color: '#c9a94e', fontWeight: 600, marginTop: '2px' }}>{FOUNDER.title}</p>
@@ -258,10 +257,10 @@ export default function HomePage() {
           <p style={{ fontSize: '12px', color: '#6b5a4a', marginTop: '4px' }}>Founded by {FOUNDER.name}</p>
           <p style={{ fontSize: '11px', color: '#a6947e', marginTop: '6px' }}>© {new Date().getFullYear()} {SCHOOL.shortName}. All rights reserved.</p>
           <div style={{ marginTop: '12px' }}>
-            <Link href="/report" style={{ display: 'inline-block', fontSize: '11px', color: '#a6947e', fontWeight: 500, marginRight: '16px' }}>
+            <Link href="/report" className="footer-link-btn" style={{ marginRight: '12px' }}>
               Download Report
             </Link>
-            <Link href="/admin" style={{ display: 'inline-block', fontSize: '11px', color: '#a6947e', fontWeight: 500 }}>
+            <Link href="/admin" className="footer-link-btn">
               Admin
             </Link>
           </div>
