@@ -145,17 +145,18 @@ export async function removeStudentPhoto(formData: FormData) {
 export async function uploadFounderPhoto(formData: FormData) {
   await requireAdmin();
   const file = formData.get('file') as File;
-  if (!file || file.size === 0) return { error: 'Missing file' };
-  if (!file.type.startsWith('image/')) return { error: 'Only images allowed' };
+  if (!file || file.size === 0) redirect('/admin');
+  if (!file.type.startsWith('image/')) redirect('/admin');
   const fileExt = file.name.split('.').pop() || 'jpg';
   const fileName = `founder/founder.${fileExt}`;
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const { error: uploadError } = await supabaseAdmin.storage.from('student-photos').upload(fileName, buffer, { upsert: true, contentType: file.type });
-  if (uploadError) return { error: uploadError.message };
-  const { data: urlData } = supabaseAdmin.storage.from('student-photos').getPublicUrl(fileName);
-  await supabaseAdmin.from('school_config').upsert({ id: 'default', founder_photo_url: urlData.publicUrl }, { onConflict: 'id' });
-  return { success: true };
+  if (!uploadError) {
+    const { data: urlData } = supabaseAdmin.storage.from('student-photos').getPublicUrl(fileName);
+    await supabaseAdmin.from('school_config').upsert({ id: 'default', founder_photo_url: urlData.publicUrl }, { onConflict: 'id' });
+  }
+  redirect('/admin');
 }
 
 export async function logout() {
