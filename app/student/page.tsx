@@ -9,29 +9,15 @@ import {
   getApplicableRecords,
   STATUS_LABELS,
   STATUS_COLORS,
-  Student,
-  AttendanceRecord,
-  Achievement,
-  WeeklyBreakdown,
-  StudentStats,
 } from '@/lib';
 
-// ============================================
-// FORCE DYNAMIC (fresh data)
-// ============================================
-
 export const dynamic = 'force-dynamic';
-
-// ============================================
-// PAGE COMPONENT
-// ============================================
 
 interface PageProps {
   searchParams: Promise<{ id?: string }>;
 }
 
 export default async function StudentProfilePage({ searchParams }: PageProps) {
-  // ✅ FIX: await searchParams - mandatory in Next.js 15
   const params = await searchParams;
   const id = params.id;
 
@@ -39,7 +25,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
     notFound();
   }
 
-  // Fetch data in parallel
   const [student, attendance, achievements] = await Promise.all([
     getStudent(id),
     getAttendanceByStudent(id),
@@ -56,7 +41,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
 
   return (
     <div className="container" style={{ padding: '1rem 0 2rem' }}>
-      {/* Back Link */}
       <Link href="/" style={{ fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>
         ← Back to Directory
       </Link>
@@ -73,7 +57,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
           margin: '0 auto',
         }}
       >
-        {/* Decorative border accents */}
         <div
           style={{
             position: 'absolute',
@@ -108,7 +91,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
               transition: 'transform var(--transition-fast)',
             }}
             onClick={(e) => {
-              // WhatsApp-style expand photo
               const target = e.currentTarget;
               const overlay = document.createElement('div');
               overlay.style.cssText = `
@@ -131,16 +113,17 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
 
               let content: HTMLElement;
               if (img) {
-                content = document.createElement('img');
-                content.src = img.src;
-                content.alt = img.alt;
-                content.style.cssText = `
+                const imgElement = document.createElement('img') as HTMLImageElement;
+                imgElement.src = img.src;
+                imgElement.alt = img.alt;
+                imgElement.style.cssText = `
                   max-width: 90vw;
                   max-height: 80vh;
                   object-fit: contain;
                   border-radius: var(--radius-md);
                   box-shadow: var(--shadow-lg);
                 `;
+                content = imgElement;
               } else {
                 content = document.createElement('div');
                 content.style.cssText = `
@@ -175,12 +158,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
               overlay.appendChild(content);
               overlay.appendChild(nameDiv);
 
-              // Tap outside to close
-              overlay.addEventListener('click', () => {
-                document.body.removeChild(overlay);
-              });
-
-              // Tap image to toggle full screen (on second tap)
               let isFullScreen = false;
               content.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -201,7 +178,10 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
                 }
               });
 
-              // ESC key to close
+              overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+              });
+
               const handleEsc = (e: KeyboardEvent) => {
                 if (e.key === 'Escape') {
                   document.body.removeChild(overlay);
@@ -212,7 +192,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
 
               document.body.appendChild(overlay);
 
-              // Add fade-in animation
               const style = document.createElement('style');
               style.textContent = `
                 @keyframes fadeIn {
@@ -304,7 +283,6 @@ export default async function StudentProfilePage({ searchParams }: PageProps) {
             * Calculated from enrollment date. Sessions before enrollment are not counted.
           </p>
 
-          {/* Pin button placeholder - will be implemented in client component */}
           <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
               Pin feature available on home page
