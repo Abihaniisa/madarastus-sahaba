@@ -1,452 +1,269 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  supabase,
-  SCHOOL,
-  FOUNDER,
-  getActiveStudents,
-  getAttendance,
-  getLatestAnnouncement,
-  calculateStats,
-  Student,
-  AttendanceRecord,
-  Announcement,
-} from '@/lib';
-
-// ============================================
-// PIN FEATURE (localStorage)
-// ============================================
-
-const PIN_STORAGE_KEY = 'madrasatus_pinned_students';
-
-function getPinnedStudents(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const data = localStorage.getItem(PIN_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setPinnedStudents(ids: string[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    // ignore
-  }
-}
-
-function togglePin(id: string): string[] {
-  const current = getPinnedStudents();
-  const index = current.indexOf(id);
-  if (index >= 0) {
-    const updated = [...current];
-    updated.splice(index, 1);
-    setPinnedStudents(updated);
-    return updated;
-  } else {
-    const updated = [...current, id];
-    setPinnedStudents(updated);
-    return updated;
-  }
-}
-
-function isPinned(id: string): boolean {
-  return getPinnedStudents().includes(id);
-}
-
-// ============================================
-// PWA INSTALL
-// ============================================
-
-const INSTALL_DISMISS_KEY = 'madrasatus_install_dismissed';
-
-function shouldShowInstall(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    const dismissed = localStorage.getItem(INSTALL_DISMISS_KEY);
-    if (!dismissed) return true;
-    const dismissedDate = parseInt(dismissed, 10);
-    const daysSince = (Date.now() - dismissedDate) / (1000 * 60 * 60 * 24);
-    return daysSince >= 7;
-  } catch {
-    return true;
-  }
-}
-
-function dismissInstall() {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
-  } catch {
-    // ignore
-  }
-}
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
+import { supabase, SCHOOL, FOUNDER, calculateStats } from '../lib';
+import type { Student, AttendanceRecord } from '../lib';
 
 export default function HomePage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [students, setStudents] = useState<any[]>([]);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
-
-  // ============================================
-  // DATA FETCHING
-  // ============================================
+  const [loading, setLoading] = useState(true);
+  const [announcement, setAnnouncement] = useState<any>(null);
 
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      try {
-        const [studentsData, attendanceData, announcementData] = await Promise.all([
-          getActiveStudents(),
-          getAttendance(),
-          getLatestAnnouncement(),
-        ]);
-        setStudents(studentsData);
-        setAttendance(attendanceData);
-        setAnnouncement(announcementData);
-        setPinnedIds(getPinnedStudents());
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  // ============================================
-  // PWA INSTALL
-  // ============================================
-
-  useEffect(() => {
-    setShowInstall(shouldShowInstall());
-
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .catch((err) => console.log('Service worker registration failed:', err));
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    const saved = localStorage.getItem('pinned_students');
+    if (saved) setPinnedIds(JSON.parse(saved));
+
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as any).standalone;
+
+    if (!isStandalone) {
+      const handler = (e: Event) => {
+        e.preventDefault();
+        setInstallPrompt(e);
+        const dismissedAt = localStorage.getItem('pwa_prompt_dismissed');
+        if (!dismissedAt || Date.now() > parseInt(dismissedAt)) {
+          setShowInstall(true);
+        }
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+    }
   }, []);
+
+  useEffect(() => {
+    async function load() {
+      const [studentsRes, attendanceRes, announcementRes] = await Promise.all([
+        supabase.from('students').select('*').eq('is_active', true).order('id'),
+        supabase.from('attendance_records').select('*').order('date'),
+        supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(1),
+      ]);
+
+      const studentsList = studentsRes.data || [];
+      const attendance = attendanceRes.data || [];
+
+      const withStats = studentsList.map((student: Student) => {
+        const studentAttendance = attendance.filter(
+          (r: AttendanceRecord) => r.student_id === student.id
+        );
+        const stats = calculateStats(studentAttendance, student);
+        return { ...student, stats };
+      });
+
+      setStudents(withStats);
+      if (announcementRes.data && announcementRes.data.length > 0) {
+        setAnnouncement(announcementRes.data[0]);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const togglePin = (id: string) => {
+    const newPinned = pinnedIds.includes(id)
+      ? pinnedIds.filter((p) => p !== id)
+      : [...pinnedIds, id];
+    setPinnedIds(newPinned);
+    localStorage.setItem('pinned_students', JSON.stringify(newPinned));
+  };
 
   const handleInstall = async () => {
-    if (installPrompt) {
-      try {
-        await installPrompt.prompt();
-        const result = await installPrompt.userChoice;
-        if (result.outcome === 'accepted') {
-          setShowInstall(false);
-        }
-      } catch {
-        // ignore
-      }
-    }
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === 'accepted') setShowInstall(false);
+    setInstallPrompt(null);
   };
 
-  const handleDismissInstall = () => {
-    dismissInstall();
-    setShowInstall(false);
-  };
-
-  // ============================================
-  // PIN HANDLING
-  // ============================================
-
-  const handlePinToggle = useCallback((id: string) => {
-    const updated = togglePin(id);
-    setPinnedIds(updated);
-  }, []);
-
-  // ============================================
-  // SORT STUDENTS: Pinned first
-  // ============================================
-
-  const sortedStudents = [...students].sort((a, b) => {
-    const aPinned = pinnedIds.includes(a.id);
-    const bPinned = pinnedIds.includes(b.id);
-    if (aPinned && !bPinned) return -1;
-    if (!aPinned && bPinned) return 1;
+  const sorted = [...students].sort((a, b) => {
+    const aPinned = pinnedIds.includes(a.id) ? 0 : 1;
+    const bPinned = pinnedIds.includes(b.id) ? 0 : 1;
+    if (aPinned !== bPinned) return aPinned - bPinned;
     return a.id.localeCompare(b.id);
   });
 
-  // ============================================
-  // RENDER
-  // ============================================
-
-  if (loading) {
-    return (
-      <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="container" style={{ padding: '1rem 0 2rem' }}>
-      {/* PWA Install Banner */}
+    <main className="page-home">
+      <header className="site-header">
+        <div className="container">
+          <div className="header-row">
+            <div className="brand">
+              <div className="brand-mark">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3c-1.8 3-2.6 5.6-2.6 8 0 3.6 2.6 6.6 2.6 9.5 0-2.9 2.6-5.9 2.6-9.5 0-2.4-.8-5-2.6-8Z"/>
+                  <path d="M4 20c2-1 4.3-1.6 8-1.6s6 .6 8 1.6"/>
+                </svg>
+              </div>
+              <div className="brand-text">
+                <h1>{SCHOOL.name}</h1>
+                <p>{SCHOOL.tagline}</p>
+              </div>
+            </div>
+            <div className="header-actions">
+              <button onClick={handleInstall} className="btn btn-gold">
+                <svg className="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                Install App
+              </button>
+              <Link href="/admin" className="btn btn-ghost">Admin</Link>
+            </div>
+          </div>
+
+          <div className="hero-verse">
+            <div className="verse-panel">
+              <span className="eyebrow">Verse of the Week</span>
+              {announcement?.arabic_text ? (
+                <p className="verse-arabic">{announcement.arabic_text}</p>
+              ) : (
+                <p className="verse-arabic">وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ</p>
+              )}
+              {announcement?.english_text ? (
+                <p className="verse-translit">{announcement.english_text}</p>
+              ) : (
+                <p className="verse-translit">"And We have certainly made the Qur'an easy for remembrance, so is there any who will remember?"</p>
+              )}
+              <p className="verse-ref">Surah Al-Qamar · 54:17</p>
+            </div>
+            <div className="schedule-panel">
+              <span className="eyebrow">Weekly Schedule</span>
+              <div className="schedule-list">
+                {announcement?.schedule ? (
+                  announcement.schedule.split('\n').map((line: string, i: number) => (
+                    <div key={i} className="schedule-row">
+                      <div className="schedule-day">{line}</div>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="schedule-row">
+                      <div className="schedule-day">Sunday – Wednesday</div>
+                      <div className="schedule-time">7:30 – 9:00 AM</div>
+                    </div>
+                    <div className="schedule-row">
+                      <div className="schedule-day">Thursday</div>
+                      <div className="schedule-time">7:30 – 9:00 AM</div>
+                    </div>
+                    <div className="schedule-row">
+                      <div className="schedule-day">Friday</div>
+                      <div className="schedule-time">—</div>
+                    </div>
+                    <div className="schedule-row">
+                      <div className="schedule-day">Saturday</div>
+                      <div className="schedule-time">9:00 – 11:00 AM</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
       {showInstall && (
-        <div
-          style={{
-            background: 'var(--color-primary)',
-            color: '#fff',
-            padding: '0.75rem 1rem',
-            borderRadius: 'var(--radius-md)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem',
-            flexWrap: 'wrap',
-            gap: '0.5rem',
-          }}
-        >
-          <span>Install Madrasatus Sahaba for quick access</span>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-accent" onClick={handleInstall}>
-              Install App
-            </button>
-            <button
-              style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
-              onClick={handleDismissInstall}
-              aria-label="Dismiss install prompt"
-            >
-              ×
+        <div className="install-strip">
+          <div className="install-inner">
+            <div className="install-copy">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>
+              </svg>
+              <p><strong>Install {SCHOOL.shortName}</strong> — add to your home screen for quick access.</p>
+            </div>
+            <button onClick={handleInstall} className="btn btn-gold">
+              <svg className="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              Install
             </button>
           </div>
         </div>
       )}
 
-      {/* School Header */}
-      <header style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '2rem' }}>{SCHOOL.name}</h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '1.1rem' }}>{SCHOOL.tagline}</p>
-        <p style={{ color: 'var(--color-text-light)', maxWidth: '600px', margin: '0.5rem auto' }}>
-          {SCHOOL.description}
-        </p>
-      </header>
+      <main className="container">
+        <section className="section" style={{ paddingBottom: '12px' }}>
+          <p className="about-copy">{SCHOOL.description}</p>
+        </section>
 
-      {/* Announcement Card */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        {announcement ? (
-          <>
-            {announcement.arabic_text && (
-              <div className="arabic" style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>
-                {announcement.arabic_text}
-              </div>
-            )}
-            {announcement.english_text && (
-              <p style={{ color: 'var(--color-text-muted)' }}>{announcement.english_text}</p>
-            )}
-            {announcement.schedule && (
-              <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                <strong>Schedule:</strong> {announcement.schedule}
-              </p>
-            )}
-          </>
-        ) : (
-          <p style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-            No announcement posted yet.
-          </p>
-        )}
-      </div>
+        <section className="section" style={{ paddingTop: '16px' }}>
+          <div className="section-head">
+            <div>
+              <h2 className="section-title">Student Directory</h2>
+              <p className="section-sub">Tap a name to view their full recitation record.</p>
+            </div>
+            <span className="count-pill">{students.length} students</span>
+          </div>
 
-      {/* Student Directory */}
-      <section>
-        <h2 style={{ marginBottom: '1rem' }}>Students</h2>
-        {sortedStudents.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)' }}>No active students.</p>
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-              gap: '1rem',
-            }}
-          >
-            {sortedStudents.map((student) => {
-              const studentAttendance = attendance.filter(
-                (a) => a.student_id === student.id
-              );
-              const stats = calculateStats(studentAttendance);
-              const pinned = pinnedIds.includes(student.id);
-
-              return (
-                <Link
-                  key={student.id}
-                  href={`/student?id=${student.id}`}
-                  style={{ textDecoration: 'none', color: 'inherit' }}
-                >
-                  <div
-                    className="card"
-                    style={{
-                      cursor: 'pointer',
-                      transition: 'transform var(--transition-fast), box-shadow var(--transition-fast)',
-                      position: 'relative',
-                      border: pinned ? '2px solid var(--color-accent)' : 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                    }}
-                  >
-                    {/* Pin Button */}
+          {loading ? (
+            <p style={{ color: 'var(--ink-soft)', fontSize: '14px' }}>Loading students...</p>
+          ) : students.length === 0 ? (
+            <div className="directory" style={{ padding: '32px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--ink-soft)', fontSize: '14px' }}>No students yet.</p>
+            </div>
+          ) : (
+            <div className="directory">
+              {sorted.map((student) => {
+                const firstLetter = student.full_name.charAt(0).toUpperCase();
+                const isPinned = pinnedIds.includes(student.id);
+                return (
+                  <div key={student.id} className="directory-row">
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handlePinToggle(student.id);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        top: '0.5rem',
-                        right: '0.5rem',
-                        background: 'transparent',
-                        border: 'none',
-                        fontSize: '1.2rem',
-                        cursor: 'pointer',
-                        color: pinned ? 'var(--color-accent)' : 'var(--color-text-light)',
-                      }}
-                      aria-label={pinned ? 'Unpin' : 'Pin'}
+                      onClick={() => togglePin(student.id)}
+                      className={`pin-btn ${isPinned ? 'is-pinned' : ''}`}
+                      aria-label={isPinned ? 'Unpin' : 'Pin'}
                     >
-                      {pinned ? '★' : '☆'}
+                      <svg viewBox="0 0 24 24" strokeWidth="1.8" fill={isPinned ? 'currentColor' : 'none'}>
+                        <path d="M12 2 9 9l-6 1 4.5 4L6 21l6-3.6L18 21l-1.5-7L21 10l-6-1-3-7Z"/>
+                      </svg>
                     </button>
-
-                    {/* Avatar / Photo */}
-                    <div
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: '50%',
-                        background: 'var(--color-primary-light)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.5rem',
-                        fontWeight: 'bold',
-                        color: '#fff',
-                        margin: '0 auto 0.5rem',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {student.photo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={student.photo_url}
-                          alt={student.full_name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : (
-                        student.full_name.charAt(0).toUpperCase()
-                      )}
-                    </div>
-
-                    <h3 style={{ fontSize: '1rem', textAlign: 'center', wordWrap: 'break-word' }}>
-                      {student.full_name}
-                    </h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', textAlign: 'center' }}>
-                      Registration Number: {student.id}
-                    </p>
-                    <div style={{ textAlign: 'center', marginTop: '0.25rem' }}>
-                      <span style={{ fontSize: '0.8rem' }}>
-                        {stats.recitationRate.toFixed(0)}% recited
-                      </span>
-                      <span style={{ margin: '0 0.25rem', color: 'var(--color-text-light)' }}>·</span>
-                      <span style={{ fontSize: '0.8rem' }}>
-                        {stats.completionRate.toFixed(0)}% completed
-                      </span>
-                    </div>
-                    {pinned && (
-                      <div
-                        style={{
-                          fontSize: '0.65rem',
-                          color: 'var(--color-accent-dark)',
-                          textAlign: 'center',
-                          marginTop: '0.25rem',
-                          fontWeight: '600',
-                          letterSpacing: '0.5px',
-                        }}
-                      >
-                        PINNED
-                      </div>
+                    {student.photo_url ? (
+                      <img src={student.photo_url} alt={student.full_name} className="avatar" />
+                    ) : (
+                      <div className="avatar">{firstLetter}</div>
                     )}
+                    <Link href={`/student?id=${student.id}`} className="student-id-block">
+                      <div className="student-name">{student.full_name}</div>
+                      <div className="student-meta">
+                        <span className="reg-tag">{student.id}</span>
+                        <span>Week {student.joining_week ?? '—'}</span>
+                      </div>
+                    </Link>
+                    <div className="stat-block">
+                      <div className="stat-pct">{student.stats.attendance}%</div>
+                      <div className="stat-caption">{student.stats.completion}% completion</div>
+                      <div className="mini-bar"><span style={{ width: `${Math.min(student.stats.attendance, 100)}%` }} /></div>
+                    </div>
                   </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-      {/* Founder Section */}
-      <section style={{ marginTop: '2rem' }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'var(--color-primary-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              color: '#fff',
-              margin: '0 auto 0.5rem',
-              overflow: 'hidden',
-            }}
-          >
-            {FOUNDER.name.charAt(0)}
+        <section className="section">
+          <div className="founder-card">
+            <div className="avatar lg founder-avatar">{FOUNDER.name.charAt(0)}</div>
+            <h3 className="founder-name">{FOUNDER.name}</h3>
+            <p className="founder-title">{FOUNDER.title}</p>
+            <p className="founder-history">{FOUNDER.history}</p>
           </div>
-          <h3>{FOUNDER.name}</h3>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>{FOUNDER.title}</p>
-          <p style={{ fontSize: '0.9rem', maxWidth: '600px', margin: '0.5rem auto' }}>
-            {FOUNDER.history}
-          </p>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer
-        style={{
-          marginTop: '2rem',
-          paddingTop: '1rem',
-          borderTop: '1px solid var(--color-border)',
-          textAlign: 'center',
-          fontSize: '0.85rem',
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        <p>{SCHOOL.name}</p>
-        <p>Founded by {FOUNDER.name}</p>
-        <p>&copy; {new Date().getFullYear()}</p>
-        <p style={{ marginTop: '0.25rem' }}>
-          <Link href="/admin" style={{ fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
+      <footer className="site-footer">
+        <div className="container">
+          <p className="foot-brand">{SCHOOL.name}</p>
+          <p className="foot-sub">Founded by {FOUNDER.name}</p>
+          <p className="foot-copy">© {new Date().getFullYear()} {SCHOOL.shortName}. All rights reserved.</p>
+          <Link href="/admin" className="foot-admin">
+            <svg viewBox="0 0 24 24" strokeWidth="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"/></svg>
             Admin
           </Link>
-        </p>
+        </div>
       </footer>
-    </div>
+    </main>
   );
 }

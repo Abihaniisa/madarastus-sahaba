@@ -1,44 +1,36 @@
-import type { Metadata } from 'next';
-import { Inter, Lora, Amiri } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { SCHOOL } from '../lib';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
-
-const lora = Lora({
-  subsets: ['latin'],
-  variable: '--font-lora',
-});
-
-const amiri = Amiri({
-  subsets: ['arabic'],
-  weight: ['400', '700'],
-  variable: '--font-amiri',
-});
-
 export const metadata: Metadata = {
-  title: 'Madrasatus Sahaba — Student Recitation & Attendance System',
-  description:
-    'A public-facing, installable PWA for recording student recitations and managing academic records.',
-  manifest: '/manifest.json',
-  themeColor: '#1a3c2a',
+  title: SCHOOL.name,
+  description: SCHOOL.tagline,
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Madrasatus Sahaba',
+    title: SCHOOL.shortName,
   },
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const viewport: Viewport = {
+  themeColor: '#1a472a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${lora.variable} ${amiri.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600;700;800&family=Lora:wght@600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
