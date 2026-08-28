@@ -67,6 +67,15 @@ CREATE TABLE public.announcements (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- New: school_config table for founder photo
+CREATE TABLE public.school_config (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  founder_photo_url TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO public.school_config (id) VALUES ('default') ON CONFLICT (id) DO NOTHING;
+
 -- ============================================
 -- STEP 3: ROW LEVEL SECURITY
 -- ============================================
@@ -75,19 +84,35 @@ ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.achievements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.school_config ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public read students" ON public.students FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Public read attendance" ON public.attendance_records FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Public read achievements" ON public.achievements FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Public read announcements" ON public.announcements FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Public read school_config" ON public.school_config FOR SELECT TO anon, authenticated USING (true);
 
 GRANT SELECT ON public.students TO anon, authenticated;
 GRANT SELECT ON public.attendance_records TO anon, authenticated;
 GRANT SELECT ON public.achievements TO anon, authenticated;
 GRANT SELECT ON public.announcements TO anon, authenticated;
+GRANT SELECT ON public.school_config TO anon, authenticated;
+
+-- Storage bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('student-photos', 'student-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Drop old policy first, then create
+DROP POLICY IF EXISTS "Public read student photos" ON storage.objects;
+
+CREATE POLICY "Public read student photos" 
+ON storage.objects FOR SELECT 
+TO anon, authenticated 
+USING (bucket_id = 'student-photos');
 
 -- ============================================
--- STEP 4: STUDENTS (10 total)
+-- STEP 5: STUDENTS (10 total)
 -- ============================================
 
 INSERT INTO public.students (id, full_name, joining_date, joining_week) VALUES
@@ -103,7 +128,7 @@ INSERT INTO public.students (id, full_name, joining_date, joining_week) VALUES
 ('MS010', 'Musa Ahmad', '2026-08-10', 5);
 
 -- ============================================
--- STEP 5: ATTENDANCE RECORDS
+-- STEP 6: ATTENDANCE RECORDS
 -- ============================================
 
 -- Week 1 (13-16 July 2026)
@@ -151,12 +176,3 @@ INSERT INTO public.attendance_records (student_id, date, status) VALUES
 ('MS001', '2026-08-24', 'R'), ('MS002', '2026-08-24', 'X'), ('MS003', '2026-08-24', 'R'), ('MS004', '2026-08-24', 'R'), ('MS005', '2026-08-24', 'M'), ('MS006', '2026-08-24', 'X'), ('MS007', '2026-08-24', 'R'), ('MS008', '2026-08-24', 'R'), ('MS009', '2026-08-24', 'R'), ('MS010', '2026-08-24', 'R'),
 ('MS001', '2026-08-25', 'R'), ('MS002', '2026-08-25', 'X'), ('MS003', '2026-08-25', 'R'), ('MS004', '2026-08-25', 'X'), ('MS005', '2026-08-25', 'M'), ('MS006', '2026-08-25', 'X'), ('MS007', '2026-08-25', 'X'), ('MS008', '2026-08-25', 'R'), ('MS009', '2026-08-25', 'X'), ('MS010', '2026-08-25', 'R'),
 ('MS001', '2026-08-26', 'R'), ('MS002', '2026-08-26', 'X'), ('MS003', '2026-08-26', 'X'), ('MS004', '2026-08-26', 'X'), ('MS005', '2026-08-26', 'R'), ('MS006', '2026-08-26', 'X'), ('MS007', '2026-08-26', 'X'), ('MS008', '2026-08-26', 'X'), ('MS009', '2026-08-26', 'X'), ('MS010', '2026-08-26', 'R');
-
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('student-photos', 'student-photos', true)
-ON CONFLICT (id) DO NOTHING;
-
-CREATE POLICY "Public read student photos" 
-ON storage.objects FOR SELECT 
-TO anon, authenticated 
-USING (bucket_id = 'student-photos');
