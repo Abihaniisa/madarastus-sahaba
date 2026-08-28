@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: SCHOOL.tagline,
     start_url: '/',
     display: 'standalone',
-    background_color: '#fafaf8',
+    background_color: '#fdf9f5',
     theme_color: '#1a472a',
   };
 }

@@ -83,6 +83,14 @@ export default function HomePage() {
     setInstallPrompt(null);
   };
 
+  const handleDismiss = () => {
+    setShowInstall(false);
+    localStorage.setItem(
+      'pwa_prompt_dismissed',
+      String(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    );
+  };
+
   const sorted = [...students].sort((a, b) => {
     const aPinned = pinnedIds.includes(a.id) ? 0 : 1;
     const bPinned = pinnedIds.includes(b.id) ? 0 : 1;
@@ -91,151 +99,139 @@ export default function HomePage() {
   });
 
   return (
-    <main className="page-home">
-      <header className="site-header">
+    <main>
+      <header style={{ background: 'linear-gradient(135deg, #1a472a, #2c6a56)', color: 'white', padding: '48px 0 32px', textAlign: 'center' }}>
         <div className="container">
-          <div className="header-row">
-            <div className="brand">
-              <div className="brand-mark">
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3c-1.8 3-2.6 5.6-2.6 8 0 3.6 2.6 6.6 2.6 9.5 0-2.9 2.6-5.9 2.6-9.5 0-2.4-.8-5-2.6-8Z"/>
-                  <path d="M4 20c2-1 4.3-1.6 8-1.6s6 .6 8 1.6"/>
-                </svg>
-              </div>
-              <div className="brand-text">
-                <h1>{SCHOOL.name}</h1>
-                <p>{SCHOOL.tagline}</p>
-              </div>
-            </div>
-            <div className="header-actions">
-              <button onClick={handleInstall} className="btn btn-gold">
-                <svg className="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                Install App
-              </button>
-              <Link href="/admin" className="btn btn-ghost">Admin</Link>
-            </div>
-          </div>
-
-          <div className="hero-verse">
-            <div className="verse-panel">
-              <span className="eyebrow">Verse of the Week</span>
-              {announcement?.arabic_text ? (
-                <p className="verse-arabic">{announcement.arabic_text}</p>
-              ) : (
-                <p className="verse-arabic">وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ</p>
-              )}
-              {announcement?.english_text ? (
-                <p className="verse-translit">{announcement.english_text}</p>
-              ) : (
-                <p className="verse-translit">"And We have certainly made the Qur'an easy for remembrance, so is there any who will remember?"</p>
-              )}
-              <p className="verse-ref">Surah Al-Qamar · 54:17</p>
-            </div>
-            <div className="schedule-panel">
-              <span className="eyebrow">Weekly Schedule</span>
-              <div className="schedule-list">
-                {announcement?.schedule ? (
-                  announcement.schedule.split('\n').map((line: string, i: number) => (
-                    <div key={i} className="schedule-row">
-                      <div className="schedule-day">{line}</div>
-                    </div>
-                  ))
-                ) : (
-                  <>
-                    <div className="schedule-row">
-                      <div className="schedule-day">Sunday – Wednesday</div>
-                      <div className="schedule-time">7:30 – 9:00 AM</div>
-                    </div>
-                    <div className="schedule-row">
-                      <div className="schedule-day">Thursday</div>
-                      <div className="schedule-time">7:30 – 9:00 AM</div>
-                    </div>
-                    <div className="schedule-row">
-                      <div className="schedule-day">Friday</div>
-                      <div className="schedule-time">—</div>
-                    </div>
-                    <div className="schedule-row">
-                      <div className="schedule-day">Saturday</div>
-                      <div className="schedule-time">9:00 – 11:00 AM</div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            {SCHOOL.name}
+          </h1>
+          <p style={{ marginTop: '8px', fontSize: 'clamp(0.875rem, 3vw, 1rem)', color: '#c9a94e', fontWeight: 500 }}>
+            {SCHOOL.tagline}
+          </p>
         </div>
       </header>
 
-      {showInstall && (
-        <div className="install-strip">
-          <div className="install-inner">
-            <div className="install-copy">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>
-              </svg>
-              <p><strong>Install {SCHOOL.shortName}</strong> — add to your home screen for quick access.</p>
+      <div className="container" style={{ padding: '20px 16px 40px' }}>
+        {showInstall && (
+          <div style={{ background: '#1a472a', color: 'white', borderRadius: '12px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', margin: '12px 0' }}>
+            <span style={{ fontSize: '13px', fontWeight: 500 }}>
+              Install {SCHOOL.shortName} for the best experience
+            </span>
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              <button onClick={handleInstall} style={{ background: '#c9a94e', color: '#1a472a', border: 'none', borderRadius: '999px', padding: '8px 16px', fontWeight: 600, fontSize: '13px' }}>
+                Install
+              </button>
+              <button onClick={handleDismiss} style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: 'none', padding: '4px 8px', fontSize: '16px' }} aria-label="Dismiss">
+                ×
+              </button>
             </div>
-            <button onClick={handleInstall} className="btn btn-gold">
-              <svg className="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-              Install
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <main className="container">
-        <section className="section" style={{ paddingBottom: '12px' }}>
-          <p className="about-copy">{SCHOOL.description}</p>
-        </section>
-
-        <section className="section" style={{ paddingTop: '16px' }}>
-          <div className="section-head">
+        <section style={{ marginTop: '16px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
+          {announcement ? (
             <div>
-              <h2 className="section-title">Student Directory</h2>
-              <p className="section-sub">Tap a name to view their full recitation record.</p>
-            </div>
-            <span className="count-pill">{students.length} students</span>
-          </div>
-
-          {loading ? (
-            <p style={{ color: 'var(--ink-soft)', fontSize: '14px' }}>Loading students...</p>
-          ) : students.length === 0 ? (
-            <div className="directory" style={{ padding: '32px', textAlign: 'center' }}>
-              <p style={{ color: 'var(--ink-soft)', fontSize: '14px' }}>No students yet.</p>
+              {announcement.arabic_text && (
+                <p style={{ fontFamily: "'Amiri', 'Noto Naskh Arabic', serif", direction: 'rtl', textAlign: 'right', fontSize: '20px', lineHeight: 2, color: '#1a472a' }}>
+                  {announcement.arabic_text}
+                </p>
+              )}
+              {announcement.english_text && (
+                <p style={{ marginTop: '12px', fontSize: '14px', lineHeight: 1.7, color: '#475569' }}>
+                  {announcement.english_text}
+                </p>
+              )}
+              {announcement.schedule && (
+                <div style={{ marginTop: '12px', background: '#fdf9f5', borderRadius: '10px', padding: '14px' }}>
+                  <p style={{ fontSize: '13px', lineHeight: 1.7, color: '#475569', whiteSpace: 'pre-wrap' }}>
+                    {announcement.schedule}
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="directory">
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <p style={{ fontSize: '15px', fontWeight: 600, color: '#1a472a' }}>
+                Weekly Recitation Schedule
+              </p>
+              <p style={{ fontSize: '13px', color: '#a6947e', marginTop: '6px' }}>
+                No announcement has been posted yet. Please check back later.
+              </p>
+            </div>
+          )}
+        </section>
+
+        <section style={{ marginTop: '24px' }}>
+          <p style={{ color: '#6b5a4a', fontSize: 'clamp(0.875rem, 2.5vw, 0.95rem)', lineHeight: 1.7 }}>
+            {SCHOOL.description}
+          </p>
+        </section>
+
+        <section style={{ marginTop: '28px' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1a472a', marginBottom: '12px' }}>
+            Students
+          </h2>
+          {loading ? (
+            <p style={{ color: '#a6947e', fontSize: '14px' }}>Loading students...</p>
+          ) : sorted.length === 0 ? (
+            <div style={{ background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '32px', textAlign: 'center' }}>
+              <p style={{ color: '#a6947e', fontSize: '14px' }}>No students yet.</p>
+            </div>
+          ) : (
+            <div style={{ background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
               {sorted.map((student) => {
                 const firstLetter = student.full_name.charAt(0).toUpperCase();
                 const isPinned = pinnedIds.includes(student.id);
                 return (
-                  <div key={student.id} className="directory-row">
+                  <div key={student.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid #f5efe8', transition: 'background 0.2s' }}>
                     <button
                       onClick={() => togglePin(student.id)}
-                      className={`pin-btn ${isPinned ? 'is-pinned' : ''}`}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: isPinned ? '#f0e4d8' : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        flexShrink: 0,
+                      }}
                       aria-label={isPinned ? 'Unpin' : 'Pin'}
+                      title={isPinned ? 'Unpin' : 'Pin to top'}
                     >
-                      <svg viewBox="0 0 24 24" strokeWidth="1.8" fill={isPinned ? 'currentColor' : 'none'}>
-                        <path d="M12 2 9 9l-6 1 4.5 4L6 21l6-3.6L18 21l-1.5-7L21 10l-6-1-3-7Z"/>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? '#1a472a' : 'none'} stroke={isPinned ? '#1a472a' : '#a6947e'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="17" x2="12" y2="22" />
+                        <path d="M5 17h14l-1.5-4.5V7a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v5.5L5 17Z" />
                       </svg>
                     </button>
                     {student.photo_url ? (
-                      <img src={student.photo_url} alt={student.full_name} className="avatar" />
+                      <img src={student.photo_url} alt={student.full_name} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                     ) : (
-                      <div className="avatar">{firstLetter}</div>
-                    )}
-                    <Link href={`/student?id=${student.id}`} className="student-id-block">
-                      <div className="student-name">{student.full_name}</div>
-                      <div className="student-meta">
-                        <span className="reg-tag">{student.id}</span>
-                        <span>Week {student.joining_week ?? '—'}</span>
+                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '16px', flexShrink: 0 }}>
+                        {firstLetter}
                       </div>
+                    )}
+                    <Link href={`/student?id=${student.id}`} style={{ flex: 1, minWidth: 0, display: 'block' }}>
+                      <p style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                        {student.full_name}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#a6947e', marginTop: '2px' }}>
+                        Reg. No: {student.id}
+                      </p>
                     </Link>
-                    <div className="stat-block">
-                      <div className="stat-pct">{student.stats.attendance}%</div>
-                      <div className="stat-caption">{student.stats.completion}% completion</div>
-                      <div className="mini-bar"><span style={{ width: `${Math.min(student.stats.attendance, 100)}%` }} /></div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ fontWeight: 700, color: '#1a472a', fontSize: '15px' }}>
+                        {student.stats.attendance}%
+                      </p>
+                      <p style={{ fontSize: '10px', color: '#a6947e' }}>
+                        Recitation
+                      </p>
                     </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a6947e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
                   </div>
                 );
               })}
@@ -243,27 +239,34 @@ export default function HomePage() {
           )}
         </section>
 
-        <section className="section">
-          <div className="founder-card">
-            <div className="avatar lg founder-avatar">{FOUNDER.name.charAt(0)}</div>
-            <h3 className="founder-name">{FOUNDER.name}</h3>
-            <p className="founder-title">{FOUNDER.title}</p>
-            <p className="founder-history">{FOUNDER.history}</p>
+        <section style={{ marginTop: '32px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 2px 10px rgba(26,71,42,0.04)' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1a472a' }}>Our Founder</h2>
+          <div style={{ marginTop: '14px' }}>
+            <div style={{ width: '100px', height: '100px', margin: '0 auto', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', fontWeight: 700 }}>
+              {FOUNDER.name.charAt(0)}
+            </div>
           </div>
+          <h3 style={{ marginTop: '14px', fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{FOUNDER.name}</h3>
+          <p style={{ fontSize: '13px', color: '#c9a94e', fontWeight: 600, marginTop: '2px' }}>{FOUNDER.title}</p>
+          <p style={{ marginTop: '12px', fontSize: '13px', color: '#6b5a4a', lineHeight: 1.7, maxWidth: '560px', margin: '12px auto 0' }}>
+            {FOUNDER.history}
+          </p>
         </section>
-      </main>
 
-      <footer className="site-footer">
-        <div className="container">
-          <p className="foot-brand">{SCHOOL.name}</p>
-          <p className="foot-sub">Founded by {FOUNDER.name}</p>
-          <p className="foot-copy">© {new Date().getFullYear()} {SCHOOL.shortName}. All rights reserved.</p>
-          <Link href="/admin" className="foot-admin">
-            <svg viewBox="0 0 24 24" strokeWidth="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"/></svg>
-            Admin
-          </Link>
-        </div>
-      </footer>
+        <footer style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e8dfd6', textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', color: '#1e293b', fontWeight: 600 }}>{SCHOOL.name}</p>
+          <p style={{ fontSize: '12px', color: '#6b5a4a', marginTop: '4px' }}>Founded by {FOUNDER.name}</p>
+          <p style={{ fontSize: '11px', color: '#a6947e', marginTop: '6px' }}>© {new Date().getFullYear()} {SCHOOL.shortName}. All rights reserved.</p>
+          <div style={{ marginTop: '12px' }}>
+            <Link href="/report" style={{ display: 'inline-block', fontSize: '11px', color: '#a6947e', fontWeight: 500, marginRight: '16px' }}>
+              Download Report
+            </Link>
+            <Link href="/admin" style={{ display: 'inline-block', fontSize: '11px', color: '#a6947e', fontWeight: 500 }}>
+              Admin
+            </Link>
+          </div>
+        </footer>
+      </div>
     </main>
   );
 }
