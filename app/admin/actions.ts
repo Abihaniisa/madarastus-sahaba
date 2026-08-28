@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from './admin-server';
 
 // ============================================
@@ -25,7 +25,6 @@ export async function addStudent(data: {
   joining_date: string;
   joining_week: number;
 }) {
-  // Get existing students to generate next ID
   const { data: existing } = await supabaseAdmin
     .from('students')
     .select('id');
@@ -101,14 +100,12 @@ export async function saveAttendanceBatch(data: {
 }) {
   const today = new Date().toISOString().split('T')[0];
 
-  // Validate no future dates
   for (const record of data.records) {
     if (record.date > today) {
       throw new Error('Cannot record future dates');
     }
   }
 
-  // Upsert records
   let successCount = 0;
   const errors: string[] = [];
 
@@ -233,7 +230,7 @@ export async function saveAnnouncement(data: {
 export async function logout() {
   const cookieStore = await cookies();
 
-  const supabase = createClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

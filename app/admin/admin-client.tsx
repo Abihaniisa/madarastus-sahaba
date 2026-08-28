@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/ssr';
+import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -31,7 +31,7 @@ import {
 type Tab = 'students' | 'attendance' | 'achievements' | 'announcement';
 
 // ============================================
-// LOGIN FORM (shown when not authenticated)
+// LOGIN FORM
 // ============================================
 
 function LoginForm({ onLogin }: { onLogin: () => void }) {
@@ -46,26 +46,9 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
     setLoading(true);
 
     try {
-      const supabaseClient = createClient(
+      const supabaseClient = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            get(name: string) {
-              const value = document.cookie
-                .split('; ')
-                .find((row) => row.startsWith(name + '='))
-                ?.split('=')[1];
-              return value;
-            },
-            set(name: string, value: string, options: any) {
-              document.cookie = `${name}=${value}; path=/; max-age=${options?.maxAge || 86400}`;
-            },
-            remove(name: string) {
-              document.cookie = `${name}=; path=/; max-age=0`;
-            },
-          },
-        }
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
       const { error } = await supabaseClient.auth.signInWithPassword({
@@ -176,7 +159,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 }
 
 // ============================================
-// DASHBOARD (shown when authenticated)
+// DASHBOARD
 // ============================================
 
 function Dashboard() {
@@ -185,19 +168,16 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Students Tab State
   const [students, setStudents] = useState<Student[]>([]);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentDate, setNewStudentDate] = useState('');
 
-  // Attendance Tab State
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'R' | 'M' | 'X'>>({});
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [savingAttendance, setSavingAttendance] = useState(false);
 
-  // Achievements Tab State
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [achievementStudent, setAchievementStudent] = useState('');
   const [achievementTitle, setAchievementTitle] = useState('');
@@ -205,15 +185,10 @@ function Dashboard() {
   const [achievementCategory, setAchievementCategory] = useState('');
   const [achievementDate, setAchievementDate] = useState('');
 
-  // Announcement Tab State
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [arabicText, setArabicText] = useState('');
   const [englishText, setEnglishText] = useState('');
   const [scheduleText, setScheduleText] = useState('');
-
-  // ============================================
-  // DATA FETCHING
-  // ============================================
 
   useEffect(() => {
     loadData();
@@ -260,10 +235,6 @@ function Dashboard() {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
   }
-
-  // ============================================
-  // STUDENTS TAB
-  // ============================================
 
   function getWeekFromDate(dateStr: string): number {
     const start = new Date('2026-07-13');
@@ -321,10 +292,6 @@ function Dashboard() {
     }
   }
 
-  // ============================================
-  // ATTENDANCE TAB
-  // ============================================
-
   function handleDateChange(date: string) {
     const today = new Date().toISOString().split('T')[0];
     if (date > today) {
@@ -381,10 +348,6 @@ function Dashboard() {
     }
   }
 
-  // ============================================
-  // ACHIEVEMENTS TAB
-  // ============================================
-
   async function handleAddAchievement() {
     if (!achievementStudent || !achievementTitle.trim()) {
       showMessage('error', 'Please select a student and enter a title');
@@ -428,10 +391,6 @@ function Dashboard() {
     }
   }
 
-  // ============================================
-  // ANNOUNCEMENT TAB
-  // ============================================
-
   async function handleSaveAnnouncement() {
     try {
       const result = await saveAnnouncement({
@@ -451,10 +410,6 @@ function Dashboard() {
     }
   }
 
-  // ============================================
-  // LOGOUT
-  // ============================================
-
   async function handleLogout() {
     try {
       await logout();
@@ -466,10 +421,6 @@ function Dashboard() {
     }
   }
 
-  // ============================================
-  // RENDER
-  // ============================================
-
   if (loading && activeTab === 'students') {
     return (
       <div className="container" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -480,7 +431,6 @@ function Dashboard() {
 
   return (
     <div className="container" style={{ padding: '1rem 0 2rem' }}>
-      {/* Header */}
       <div
         style={{
           display: 'flex',
@@ -497,7 +447,6 @@ function Dashboard() {
         </button>
       </div>
 
-      {/* Message */}
       {message && (
         <div
           style={{
@@ -512,7 +461,6 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Tabs */}
       <div
         style={{
           display: 'flex',
@@ -544,10 +492,9 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* ===== TAB: STUDENTS ===== */}
+      {/* Students Tab */}
       {activeTab === 'students' && (
         <div>
-          {/* Add Student Form */}
           <div className="card" style={{ marginBottom: '1rem' }}>
             <h4 style={{ marginBottom: '0.5rem' }}>Add Student</h4>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -580,7 +527,6 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Student List */}
           <div className="card">
             <h4 style={{ marginBottom: '0.5rem' }}>
               Students ({students.length})
@@ -655,7 +601,6 @@ function Dashboard() {
                             input.onchange = async (e) => {
                               const file = (e.target as HTMLInputElement).files?.[0];
                               if (!file) return;
-                              // This would call uploadPhoto from actions
                               showMessage('success', 'Photo upload feature coming soon');
                             };
                             input.click();
@@ -673,7 +618,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* ===== TAB: ATTENDANCE ===== */}
+      {/* Attendance Tab */}
       {activeTab === 'attendance' && (
         <div>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -792,7 +737,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* ===== TAB: ACHIEVEMENTS ===== */}
+      {/* Achievements Tab */}
       {activeTab === 'achievements' && (
         <div>
           <div className="card" style={{ marginBottom: '1rem' }}>
@@ -896,7 +841,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* ===== TAB: ANNOUNCEMENT ===== */}
+      {/* Announcement Tab */}
       {activeTab === 'announcement' && (
         <div>
           {announcement && (
@@ -997,20 +942,9 @@ export default function AdminClient() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const supabaseClient = createClient(
+        const supabaseClient = createBrowserClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          {
-            cookies: {
-              get(name: string) {
-                const value = document.cookie
-                  .split('; ')
-                  .find((row) => row.startsWith(name + '='))
-                  ?.split('=')[1];
-                return value;
-              },
-            },
-          }
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         );
         const { data } = await supabaseClient.auth.getSession();
         setIsLoggedIn(!!data?.session);
