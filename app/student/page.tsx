@@ -1,202 +1,422 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
-  supabase,
-  SCHOOL,
-  STATUS_LABELS,
+  getStudent,
+  getAttendanceByStudent,
+  getAchievementsByStudent,
   calculateStats,
-  getWeekly,
-  getApplicable,
-} from '../../lib';
-import type { Student, AttendanceRecord, Achievement } from '../../lib';
+  getWeeklyBreakdown,
+  getApplicableRecords,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  Student,
+  AttendanceRecord,
+  Achievement,
+  WeeklyBreakdown,
+  StudentStats,
+} from '@/lib';
+
+// ============================================
+// FORCE DYNAMIC (fresh data)
+// ============================================
 
 export const dynamic = 'force-dynamic';
 
-export default async function StudentPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ id: string }>;
-}) {
-  const { id } = await searchParams;
+// ============================================
+// PAGE COMPONENT
+// ============================================
+
+interface PageProps {
+  searchParams: Promise<{ id?: string }>;
+}
+
+export default async function StudentProfilePage({ searchParams }: PageProps) {
+  // ✅ FIX: await searchParams - mandatory in Next.js 15
+  const params = await searchParams;
+  const id = params.id;
 
   if (!id) {
-    return (
-      <main className="container" style={{ padding: '48px 16px', textAlign: 'center' }}>
-        <h1 style={{ fontFamily: "'Lora',Georgia,serif", fontSize: '1.5rem', color: 'var(--ink)' }}>Student not found</h1>
-        <Link href="/" style={{ color: 'var(--green)', textDecoration: 'underline', marginTop: '16px', display: 'inline-block', fontWeight: 600 }}>
-          Back to home
-        </Link>
-      </main>
-    );
+    notFound();
   }
 
-  const { data: studentData } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (!studentData) {
-    return (
-      <main className="container" style={{ padding: '48px 16px', textAlign: 'center' }}>
-        <h1 style={{ fontFamily: "'Lora',Georgia,serif", fontSize: '1.5rem', color: 'var(--ink)' }}>Student not found</h1>
-        <Link href="/" style={{ color: 'var(--green)', textDecoration: 'underline', marginTop: '16px', display: 'inline-block', fontWeight: 600 }}>
-          Back to home
-        </Link>
-      </main>
-    );
-  }
-
-  const student: Student = studentData;
-
-  const [attendanceRes, achievementsRes] = await Promise.all([
-    supabase.from('attendance_records').select('*').eq('student_id', id).order('date'),
-    supabase.from('achievements').select('*').eq('student_id', id).order('date', { ascending: false }),
+  // Fetch data in parallel
+  const [student, attendance, achievements] = await Promise.all([
+    getStudent(id),
+    getAttendanceByStudent(id),
+    getAchievementsByStudent(id),
   ]);
 
-  const records: AttendanceRecord[] = attendanceRes.data || [];
-  const achievements: Achievement[] = achievementsRes.data || [];
+  if (!student) {
+    notFound();
+  }
 
-  const stats = calculateStats(records, student);
-  const weekly = getWeekly(records, student);
-  const applicable = getApplicable(records, student);
-  const firstLetter = student.full_name.charAt(0).toUpperCase();
+  const applicableRecords = getApplicableRecords(attendance, student.joining_date);
+  const stats = calculateStats(applicableRecords);
+  const weeklyBreakdown = getWeeklyBreakdown(applicableRecords, student.joining_week);
 
   return (
-    <main className="profile-shell">
-      <div className="container">
-        <Link href="/" className="profile-back">
-          <svg viewBox="0 0 24 24" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
-          Back to Students
-        </Link>
+    <div className="container" style={{ padding: '1rem 0 2rem' }}>
+      {/* Back Link */}
+      <Link href="/" style={{ fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>
+        ← Back to Directory
+      </Link>
 
-        <div className="cert">
-          <div className="cert-inner">
-            <div className="cert-band">{SCHOOL.shortName} <span>·</span> Student Record</div>
-            <div className="cert-body">
-              <span className="cert-corner corner-tl" />
-              <span className="cert-corner corner-tr" />
-              <span className="cert-corner corner-bl" />
-              <span className="cert-corner corner-br" />
+      {/* Report Card */}
+      <div
+        className="card"
+        style={{
+          border: '3px double var(--color-accent)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1.5rem',
+          position: 'relative',
+          maxWidth: '500px',
+          margin: '0 auto',
+        }}
+      >
+        {/* Decorative border accents */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '0.5rem',
+            left: '0.5rem',
+            right: '0.5rem',
+            bottom: '0.5rem',
+            border: '1px solid var(--color-accent-light)',
+            borderRadius: 'var(--radius-md)',
+            pointerEvents: 'none',
+          }}
+        />
 
-              <div className="cert-id-row">
-                <div className="cert-photo">
-                  {student.photo_url ? (
-                    <img src={student.photo_url} alt={student.full_name} className="avatar lg" />
-                  ) : (
-                    <div className="avatar lg">{firstLetter}</div>
-                  )}
-                </div>
-                <div className="cert-id-text">
-                  <h1>{student.full_name}</h1>
-                  <div className="cert-id-meta">
-                    <span>Registration Number: <b>{student.id}</b></span>
-                    <span>Enrolled in Program: Week <b>{student.joining_week ?? '—'}</b></span>
-                    {student.joining_date && <span>Enrolled on: <b>{student.joining_date}</b></span>}
-                  </div>
-                  <span className={`badge ${student.is_active ? 'active' : 'inactive'}`}>
-                    <svg viewBox="0 0 24 24" strokeWidth="2"><path d="M20 6 9 17l-5-5"/></svg>
-                    {student.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Photo / Avatar - Expandable (WhatsApp-style) */}
+          <div
+            style={{
+              width: '100px',
+              height: '100px',
+              borderRadius: '50%',
+              background: 'var(--color-primary-light)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2.5rem',
+              fontWeight: 'bold',
+              color: '#fff',
+              margin: '0 auto 0.75rem',
+              overflow: 'hidden',
+              cursor: 'pointer',
+              border: '3px solid var(--color-accent)',
+              transition: 'transform var(--transition-fast)',
+            }}
+            onClick={(e) => {
+              // WhatsApp-style expand photo
+              const target = e.currentTarget;
+              const overlay = document.createElement('div');
+              overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.85);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                animation: fadeIn 0.2s ease;
+              `;
 
-              <div className="cert-stats">
-                <div className="stat-card">
-                  <div className="big">{stats.attendance}%</div>
-                  <div className="label">Recitation Rate</div>
-                  <div className="bar"><span style={{ width: `${Math.min(stats.attendance, 100)}%` }} /></div>
-                </div>
-                <div className="stat-card gold">
-                  <div className="big">{stats.completion}%</div>
-                  <div className="label">Completion Rate</div>
-                  <div className="bar"><span style={{ width: `${Math.min(stats.completion, 100)}%` }} /></div>
-                </div>
-              </div>
+              const img = target.querySelector('img');
+              const letter = target.textContent?.trim() || '';
 
-              <div className="tally-row">
-                <div className="tally-chip"><span className="tally-dot r" />Recited (R) <span className="n">{stats.r}</span></div>
-                <div className="tally-chip"><span className="tally-dot m" />Makeup (M) <span className="n">{stats.m}</span></div>
-                <div className="tally-chip"><span className="tally-dot x" />Pending (X) <span className="n">{stats.x}</span></div>
-              </div>
+              let content: HTMLElement;
+              if (img) {
+                content = document.createElement('img');
+                content.src = img.src;
+                content.alt = img.alt;
+                content.style.cssText = `
+                  max-width: 90vw;
+                  max-height: 80vh;
+                  object-fit: contain;
+                  border-radius: var(--radius-md);
+                  box-shadow: var(--shadow-lg);
+                `;
+              } else {
+                content = document.createElement('div');
+                content.style.cssText = `
+                  width: 200px;
+                  height: 200px;
+                  border-radius: 50%;
+                  background: var(--color-primary-light);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 4rem;
+                  font-weight: bold;
+                  color: #fff;
+                `;
+                content.textContent = letter;
+              }
 
-              <p style={{ fontSize: '11px', color: 'var(--ink-soft)', fontStyle: 'italic', textAlign: 'center', marginTop: '16px' }}>
-                Calculated from enrollment date. Sessions before enrollment are not counted.
-              </p>
-            </div>
-          </div>
-        </div>
+              const nameDiv = document.createElement('div');
+              nameDiv.textContent = student.full_name;
+              nameDiv.style.cssText = `
+                position: absolute;
+                bottom: 10%;
+                left: 50%;
+                transform: translateX(-50%);
+                color: #fff;
+                font-size: 1.2rem;
+                font-weight: 600;
+                text-align: center;
+                font-family: var(--font-family-body);
+              `;
 
-        <div className="detail-grid">
-          <div className="panel">
-            <div className="panel-title">
-              <svg viewBox="0 0 24 24" strokeWidth="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/><path d="M8 2v4M16 2v4"/></svg>
-              Weekly Breakdown
-            </div>
-            {weekly.map((w) => (
-              <div key={w.week} className="week-row">
-                <span className="week-label">W{w.week}</span>
-                <span className="week-dots">
-                  {Array.from({ length: w.r }).map((_, i) => <span key={`r${i}`} className="dot r" />)}
-                  {Array.from({ length: w.m }).map((_, i) => <span key={`m${i}`} className="dot m" />)}
-                  {Array.from({ length: w.x }).map((_, i) => <span key={`x${i}`} className="dot x" />)}
-                </span>
-                <span className="week-pct">{w.attendance}%</span>
-              </div>
-            ))}
-          </div>
+              overlay.appendChild(content);
+              overlay.appendChild(nameDiv);
 
-          <div className="panel">
-            <div className="panel-title">
-              <svg viewBox="0 0 24 24" strokeWidth="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-              All Sessions
-            </div>
-            {applicable.map((r) => (
-              <div key={r.id} className="session-row">
-                <span className="session-date">
-                  {new Date(r.date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                </span>
-                <span className={`session-status ${r.status === 'R' ? 'r' : r.status === 'M' ? 'm' : 'x'}`}>
-                  {r.status === 'R' && <svg viewBox="0 0 24 24" strokeWidth="2"><path d="M20 6 9 17l-5-5"/></svg>}
-                  {r.status === 'M' && <svg viewBox="0 0 24 24" strokeWidth="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>}
-                  {r.status === 'X' && <svg viewBox="0 0 24 24" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>}
-                  {STATUS_LABELS[r.status]?.label}
-                </span>
-              </div>
-            ))}
-          </div>
+              // Tap outside to close
+              overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+              });
 
-          <div className="panel full">
-            <div className="panel-title">
-              <svg viewBox="0 0 24 24" strokeWidth="1.8"><path d="M12 2 9.2 8.6 2 9.3l5.5 4.6L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.3l-7.2-.7Z"/></svg>
-              Achievements
-            </div>
-            {achievements.length === 0 ? (
-              <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>No achievements recorded yet.</p>
+              // Tap image to toggle full screen (on second tap)
+              let isFullScreen = false;
+              content.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isFullScreen) {
+                  if (img) {
+                    content.style.maxWidth = '100vw';
+                    content.style.maxHeight = '100vh';
+                    content.style.borderRadius = '0';
+                  }
+                  isFullScreen = true;
+                } else {
+                  if (img) {
+                    content.style.maxWidth = '90vw';
+                    content.style.maxHeight = '80vh';
+                    content.style.borderRadius = 'var(--radius-md)';
+                  }
+                  isFullScreen = false;
+                }
+              });
+
+              // ESC key to close
+              const handleEsc = (e: KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                  document.body.removeChild(overlay);
+                  document.removeEventListener('keydown', handleEsc);
+                }
+              };
+              document.addEventListener('keydown', handleEsc);
+
+              document.body.appendChild(overlay);
+
+              // Add fade-in animation
+              const style = document.createElement('style');
+              style.textContent = `
+                @keyframes fadeIn {
+                  from { opacity: 0; }
+                  to { opacity: 1; }
+                }
+              `;
+              document.head.appendChild(style);
+              setTimeout(() => document.head.removeChild(style), 300);
+            }}
+          >
+            {student.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={student.photo_url}
+                alt={student.full_name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
             ) : (
-              achievements.map((a) => (
-                <div key={a.id} className="achievement-item">
-                  <div className="achievement-icon">
-                    <svg viewBox="0 0 24 24" strokeWidth="1.8"><path d="M12 2 9.2 8.6 2 9.3l5.5 4.6L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.3l-7.2-.7Z"/></svg>
-                  </div>
-                  <div>
-                    <div className="achievement-title">{a.title}</div>
-                    {a.date && <div className="achievement-sub">{a.category ? `${a.category} — ` : ''}{a.date}</div>}
-                    {a.description && <div className="achievement-sub">{a.description}</div>}
-                  </div>
-                </div>
-              ))
+              student.full_name.charAt(0).toUpperCase()
             )}
           </div>
-        </div>
 
-        <footer className="site-footer" style={{ borderTop: '1px solid var(--line)', marginTop: '8px' }}>
-          <p className="foot-copy">© {new Date().getFullYear()} {SCHOOL.shortName}</p>
-          <Link href="/admin" className="foot-admin">
-            <svg viewBox="0 0 24 24" strokeWidth="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"/></svg>
-            Admin
-          </Link>
-        </footer>
+          <h2 style={{ textAlign: 'center', fontSize: '1.25rem', wordWrap: 'break-word' }}>
+            {student.full_name}
+          </h2>
+          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+            Registration Number: {student.id}
+          </p>
+
+          <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
+            <p style={{ fontSize: '0.9rem' }}>
+              <strong>Enrolled in Program:</strong> Week {student.joining_week}
+            </p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+              Enrolled on: {student.joining_date}
+            </p>
+          </div>
+
+          {/* Stats */}
+          <div
+            style={{
+              background: 'var(--color-bg)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.75rem',
+              margin: '0.75rem 0',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                  {stats.recitationRate.toFixed(0)}%
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                  Recitation Rate
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-accent-dark)' }}>
+                  {stats.completionRate.toFixed(0)}%
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                  Completion Rate
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '1rem',
+                marginTop: '0.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <span>
+                <span className="badge badge-r">R</span> {stats.recited}
+              </span>
+              <span>
+                <span className="badge badge-m">M</span> {stats.makeup}
+              </span>
+              <span>
+                <span className="badge badge-x">X</span> {stats.pending}
+              </span>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', textAlign: 'center', fontStyle: 'italic' }}>
+            * Calculated from enrollment date. Sessions before enrollment are not counted.
+          </p>
+
+          {/* Pin button placeholder - will be implemented in client component */}
+          <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              Pin feature available on home page
+            </span>
+          </div>
+        </div>
       </div>
-    </main>
+
+      {/* Weekly Breakdown */}
+      <section style={{ marginTop: '1.5rem', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto' }}>
+        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Weekly Breakdown</h3>
+        {weeklyBreakdown.length === 0 ? (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>No weeks recorded yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {weeklyBreakdown.map((week) => (
+              <div
+                key={week.week}
+                className="card"
+                style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <span style={{ fontWeight: '600', fontSize: '0.8rem', minWidth: '55px' }}>
+                  Week {week.week}
+                </span>
+                <div style={{ display: 'flex', gap: '0.25rem', flex: 1 }}>
+                  {week.days.map((day, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: day.status
+                          ? STATUS_COLORS[day.status]
+                          : 'var(--color-bg)',
+                        border: day.status ? 'none' : '1px solid var(--color-border)',
+                        display: 'inline-block',
+                      }}
+                      title={`${day.date}: ${day.status ? STATUS_LABELS[day.status] : 'No session'}`}
+                    />
+                  ))}
+                </div>
+                <span style={{ fontSize: '0.8rem', minWidth: '45px', textAlign: 'right' }}>
+                  {week.rate.toFixed(0)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* All Sessions */}
+      <section style={{ marginTop: '1.5rem', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto' }}>
+        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>All Sessions</h3>
+        {applicableRecords.length === 0 ? (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>No sessions recorded.</p>
+        ) : (
+          <div
+            className="card"
+            style={{
+              padding: '0.5rem',
+              maxHeight: '200px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.15rem',
+            }}
+          >
+            {applicableRecords.map((record) => (
+              <div
+                key={record.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.85rem',
+                  borderBottom: '1px solid var(--color-border)',
+                }}
+              >
+                <span>{record.date}</span>
+                <span className={`badge badge-${record.status.toLowerCase()}`}>
+                  {STATUS_LABELS[record.status]}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Achievements */}
+      <section style={{ marginTop: '1.5rem', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto' }}>
+        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Achievements</h3>
+        {achievements.length === 0 ? (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>No achievements recorded yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {achievements.map((achievement) => (
+              <div key={achievement.id} className="card" style={{ padding: '0.5rem 0.75rem' }}>
+                <p style={{ fontWeight: '600', fontSize: '0.9rem' }}>{achievement.title}</p>
+                {achievement.description && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    {achievement.description}
+                  </p>
+                )}
+                <p style={{ fontSize: '0.7rem', color: 'var(--color-text-light)' }}>
+                  {achievement.category || 'Achievement'} · {achievement.date || ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
