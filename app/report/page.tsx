@@ -24,9 +24,7 @@ export default function ReportPage() {
   }, []);
 
   const studentAttendanceMap = new Map<string, Map<string, string>>();
-  for (const student of students) {
-    studentAttendanceMap.set(student.id, new Map());
-  }
+  for (const student of students) studentAttendanceMap.set(student.id, new Map());
   for (const rec of attendance) {
     const map = studentAttendanceMap.get(rec.student_id);
     if (map) map.set(rec.date, rec.status);
@@ -54,19 +52,13 @@ export default function ReportPage() {
       <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <Link href="/" className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>← Back to Home</Link>
-          <button onClick={() => window.print()} className="btn-primary no-print">
-            Print / Save as PDF
-          </button>
+          <button onClick={() => window.print()} className="btn-primary no-print">Print / Save as PDF</button>
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', fontWeight: 800, color: '#1a472a', marginBottom: '4px' }}>
-            {SCHOOL.name}
-          </h1>
+          <h1 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', fontWeight: 800, color: '#1a472a', marginBottom: '4px' }}>{SCHOOL.name}</h1>
           <p style={{ fontSize: '14px', color: '#6b5a4a', fontWeight: 600 }}>Recitation Record Sheet</p>
-          <p style={{ fontSize: '12px', color: '#a6947e', marginTop: '4px' }}>
-            Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
+          <p style={{ fontSize: '12px', color: '#a6947e', marginTop: '4px' }}>Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
 
         {loading ? (
@@ -83,9 +75,7 @@ export default function ReportPage() {
               <div key={weekNum} style={{ marginBottom: '24px', background: 'white', borderRadius: '16px', border: '1px solid #e8dfd6', overflow: 'hidden', pageBreakInside: 'avoid' }}>
                 <div style={{ background: '#1a472a', color: 'white', padding: '12px 20px', fontWeight: 700, fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                   <span>Week {weekNum}</span>
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>
-                    {monthName} · {weekStart} to {weekEnd}
-                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>{monthName} · {weekStart} to {weekEnd}</span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '700px' }}>
@@ -118,24 +108,11 @@ export default function ReportPage() {
                               }
                               return (
                                 <td key={date} style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 700, fontSize: '13px' }}>
-                                  <span style={{
-                                    display: 'inline-block',
-                                    width: '28px',
-                                    height: '28px',
-                                    lineHeight: '28px',
-                                    borderRadius: '6px',
-                                    background: status === 'R' ? '#dcfce7' : status === 'M' ? '#fef9c3' : status === 'X' ? '#f1f5f9' : '#fdf9f5',
-                                    color: status === 'R' ? '#166534' : status === 'M' ? '#854d0e' : status === 'X' ? '#475569' : '#cbd5e1',
-                                    border: '1px solid ' + (status === 'R' ? '#22c55e' : status === 'M' ? '#eab308' : status === 'X' ? '#94a3b8' : '#e8dfd6'),
-                                  }}>
-                                    {status || '·'}
-                                  </span>
+                                  <span style={{ display: 'inline-block', width: '28px', height: '28px', lineHeight: '28px', borderRadius: '6px', background: status === 'R' ? '#dcfce7' : status === 'M' ? '#fef9c3' : status === 'X' ? '#f1f5f9' : '#fdf9f5', color: status === 'R' ? '#166534' : status === 'M' ? '#854d0e' : status === 'X' ? '#475569' : '#cbd5e1', border: '1px solid ' + (status === 'R' ? '#22c55e' : status === 'M' ? '#eab308' : status === 'X' ? '#94a3b8' : '#e8dfd6') }}>{status || '·'}</span>
                                 </td>
                               );
                             })}
-                            <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#1a472a' }}>
-                              {stats.total > 0 ? `${stats.attendance}%` : '—'}
-                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#1a472a' }}>{stats.total > 0 ? `${stats.attendance}%` : '—'}</td>
                           </tr>
                         );
                       })}
