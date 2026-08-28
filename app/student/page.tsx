@@ -8,6 +8,7 @@ import {
   getApplicable,
 } from '../../lib';
 import type { Student, AttendanceRecord, Achievement } from '../../lib';
+import AvatarViewer from './avatar-viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,13 +92,13 @@ export default async function StudentPage({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginTop: '16px', flexWrap: 'wrap' }}>
-          {student.photo_url ? (
-            <img src={student.photo_url} alt={student.full_name} style={{ width: '80px', height: '80px', borderRadius: '8px', objectFit: 'cover', border: '2px solid #c9a94e' }} />
-          ) : (
-            <div style={{ width: '80px', height: '80px', borderRadius: '8px', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, border: '2px solid #c9a94e' }}>
-              {firstLetter}
-            </div>
-          )}
+          <AvatarViewer
+            src={student.photo_url}
+            initial={firstLetter}
+            name={student.full_name}
+            size={80}
+            shape="rounded"
+          />
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>
               {student.full_name}
@@ -227,7 +228,7 @@ export default async function StudentPage({
 
       <footer style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid #e8dfd6', textAlign: 'center' }}>
         <p style={{ fontSize: '11px', color: '#a6947e' }}>© {new Date().getFullYear()} {SCHOOL.shortName}</p>
-        <Link href="/admin" style={{ display: 'inline-block', marginTop: '8px', fontSize: '11px', color: '#a6947e', fontWeight: 500 }}>
+        <Link href="/admin" className="footer-link-btn" style={{ marginTop: '8px' }}>
           Admin
         </Link>
       </footer>
