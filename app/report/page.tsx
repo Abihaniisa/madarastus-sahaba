@@ -5,11 +5,6 @@ import Link from 'next/link';
 import { supabase, SCHOOL, calculateStats } from '../../lib';
 import type { Student, AttendanceRecord } from '../../lib';
 
-export const metadata = {
-  title: `Recitation Report — ${SCHOOL.name}`,
-  description: 'Complete recitation record sheet.',
-};
-
 export default function ReportPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -109,7 +104,6 @@ export default function ReportPage() {
                     </thead>
                     <tbody>
                       {students.map((student) => {
-                        const enrolled = student.joining_date ? student.joining_date <= weekEnd : true;
                         const weekRecords = attendance.filter((r) => r.student_id === student.id && weekDates.includes(r.date));
                         const stats = calculateStats(weekRecords, student);
                         return (
