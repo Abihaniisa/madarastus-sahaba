@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase, SCHOOL, calculateStats } from '../../lib';
+import { supabase, SCHOOL, getWeeklyStatsForWeek, getRecitationDatesForWeek } from '../../lib';
 import type { Student, AttendanceRecord } from '../../lib';
 
 export default function ReportPage() {
@@ -24,28 +24,15 @@ export default function ReportPage() {
   }, []);
 
   const studentAttendanceMap = new Map<string, Map<string, string>>();
-  for (const student of students) studentAttendanceMap.set(student.id, new Map());
+  for (const student of students) {
+    studentAttendanceMap.set(student.id, new Map());
+  }
   for (const rec of attendance) {
     const map = studentAttendanceMap.get(rec.student_id);
     if (map) map.set(rec.date, rec.status);
   }
 
-  const allDates = Array.from(new Set(attendance.map((r) => r.date))).sort();
-  const weekMap = new Map<number, string[]>();
-  for (const date of allDates) {
-    const week = getSchoolWeek(date);
-    if (!weekMap.has(week)) weekMap.set(week, []);
-    weekMap.get(week)!.push(date);
-  }
-  const weeks = Array.from(weekMap.keys()).sort((a, b) => a - b);
-
-  function getSchoolWeek(dateStr: string): number {
-    const start = new Date('2026-07-13T00:00:00Z');
-    const date = new Date(dateStr + 'T00:00:00Z');
-    const diffDays = Math.floor((date.getTime() - start.getTime()) / 86400000);
-    if (diffDays < 0) return 0;
-    return Math.floor(diffDays / 7) + 1;
-  }
+  const weeks = [1, 2, 3, 4, 5, 6, 7];
 
   return (
     <main style={{ background: '#fdf9f5', minHeight: '100vh', padding: '20px 16px 40px' }}>
@@ -58,18 +45,19 @@ export default function ReportPage() {
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', fontWeight: 800, color: '#1a472a', marginBottom: '4px' }}>{SCHOOL.name}</h1>
           <p style={{ fontSize: '14px', color: '#6b5a4a', fontWeight: 600 }}>Recitation Record Sheet</p>
-          <p style={{ fontSize: '12px', color: '#a6947e', marginTop: '4px' }}>Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <p style={{ fontSize: '12px', color: '#a6947e', marginTop: '4px' }}>
+            Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
 
         {loading ? (
           <p style={{ textAlign: 'center', color: '#a6947e' }}>Loading report...</p>
         ) : (
           weeks.map((weekNum) => {
-            const weekDates = weekMap.get(weekNum) || [];
+            const weekDates = getRecitationDatesForWeek(weekNum);
             const weekStart = weekDates[0] || '';
             const weekEnd = weekDates[weekDates.length - 1] || '';
-            const startDate = new Date(weekStart + 'T00:00:00Z');
-            const monthName = startDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+            const monthName = weekStart ? new Date(weekStart + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : '';
 
             return (
               <div key={weekNum} style={{ marginBottom: '24px', background: 'white', borderRadius: '16px', border: '1px solid #e8dfd6', overflow: 'hidden', pageBreakInside: 'avoid' }}>
@@ -94,25 +82,32 @@ export default function ReportPage() {
                     </thead>
                     <tbody>
                       {students.map((student) => {
-                        const weekRecords = attendance.filter((r) => r.student_id === student.id && weekDates.includes(r.date));
-                        const stats = calculateStats(weekRecords, student);
+                        const weekStats = getWeeklyStatsForWeek(attendance, student, weekNum);
                         return (
                           <tr key={student.id} style={{ borderBottom: '1px solid #f5efe8' }}>
                             <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1a472a' }}>{student.id}</td>
                             <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>{student.full_name}</td>
                             {weekDates.map((date) => {
-                              const status = studentAttendanceMap.get(student.id)?.get(date) || '';
-                              const studentEnrolled = student.joining_date ? student.joining_date <= date : true;
-                              if (!studentEnrolled) {
-                                return <td key={date} style={{ padding: '10px 6px', textAlign: 'center', color: '#cbd5e1' }}>—</td>;
+                              const studentStartDate = student.joining_date || (student.joining_week ? getRecitationDatesForWeek(student.joining_week)[0] : null);
+                              if (studentStartDate && date < studentStartDate) {
+                                return (
+                                  <td key={date} style={{ padding: '10px 6px', textAlign: 'center', color: '#a6947e' }}>
+                                    <span style={{ display: 'inline-block', width: '28px', height: '28px', lineHeight: '28px', borderRadius: '50%', border: '1px dashed #c9a94e', background: 'transparent', color: '#a6947e' }}>O</span>
+                                  </td>
+                                );
                               }
+                              const status = studentAttendanceMap.get(student.id)?.get(date) || 'X';
                               return (
                                 <td key={date} style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 700, fontSize: '13px' }}>
-                                  <span style={{ display: 'inline-block', width: '28px', height: '28px', lineHeight: '28px', borderRadius: '6px', background: status === 'R' ? '#dcfce7' : status === 'M' ? '#fef9c3' : status === 'X' ? '#f1f5f9' : '#fdf9f5', color: status === 'R' ? '#166534' : status === 'M' ? '#854d0e' : status === 'X' ? '#475569' : '#cbd5e1', border: '1px solid ' + (status === 'R' ? '#22c55e' : status === 'M' ? '#eab308' : status === 'X' ? '#94a3b8' : '#e8dfd6') }}>{status || '·'}</span>
+                                  <span style={{ display: 'inline-block', width: '28px', height: '28px', lineHeight: '28px', borderRadius: '6px', background: status === 'R' ? '#dcfce7' : status === 'M' ? '#fef9c3' : '#f1f5f9', color: status === 'R' ? '#166534' : status === 'M' ? '#854d0e' : '#475569', border: '1px solid ' + (status === 'R' ? '#22c55e' : status === 'M' ? '#eab308' : '#94a3b8') }}>
+                                    {status === 'X' ? 'X' : status}
+                                  </span>
                                 </td>
                               );
                             })}
-                            <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#1a472a' }}>{stats.total > 0 ? `${stats.attendance}%` : '—'}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#1a472a' }}>
+                              {weekStats.total > 0 ? `${weekStats.attendance}%` : '—'}
+                            </td>
                           </tr>
                         );
                       })}
@@ -126,7 +121,7 @@ export default function ReportPage() {
 
         <div style={{ textAlign: 'center', fontSize: '12px', color: '#6b5a4a', marginTop: '24px', padding: '16px', background: '#fdf9f5', borderRadius: '8px' }}>
           <p style={{ fontWeight: 700, marginBottom: '4px' }}>Legend</p>
-          <p>R = Recited &nbsp;&nbsp;|&nbsp;&nbsp; M = Makeup &nbsp;&nbsp;|&nbsp;&nbsp; X = Pending &nbsp;&nbsp;|&nbsp;&nbsp; — = Not Enrolled</p>
+          <p>R = Recited &nbsp;&nbsp;|&nbsp;&nbsp; M = Makeup &nbsp;&nbsp;|&nbsp;&nbsp; X = Pending &nbsp;&nbsp;|&nbsp;&nbsp; O = Not Enrolled</p>
         </div>
 
         <style>{`
