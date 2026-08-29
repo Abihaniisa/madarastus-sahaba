@@ -195,7 +195,8 @@ export async function uploadStudentPhoto(formData: FormData) {
   }
 
   const fileExt = file.name.split('.').pop() || 'jpg';
-  const fileName = `students/${student_id}.${fileExt}`;
+  const unique = Date.now();
+  const fileName = `students/${student_id}-${unique}.${fileExt}`;
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
@@ -271,7 +272,8 @@ export async function uploadFounderPhoto(formData: FormData) {
   }
 
   const fileExt = file.name.split('.').pop() || 'jpg';
-  const fileName = `founder/founder.${fileExt}`;
+  const unique = Date.now();
+  const fileName = `founder/founder-${unique}.${fileExt}`;
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
