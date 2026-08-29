@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { SCHOOL } from '../../lib';
 import type { Student, Achievement } from '../../lib';
@@ -37,16 +38,15 @@ export default function AdminClient({ mode, students, achievements, announcement
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [croppingFor, setCroppingFor] = useState<string | null>(null);
   const [cropSrc, setCropSrc] = useState<string>('');
+  const [founderCropping, setFounderCropping] = useState(false);
+  const [founderCropSrc, setFounderCropSrc] = useState('');
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const [founderUploading, setFounderUploading] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const [windowState, setWindowState] = useState<any>(null);
+  const founderFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setWindowState(window);
     if (toast) {
       const timer = setTimeout(() => setToast(null), 4000);
       return () => clearTimeout(timer);
@@ -116,60 +116,44 @@ export default function AdminClient({ mode, students, achievements, announcement
     setCroppingFor(studentId);
   };
 
-  const handleCropComplete = (file: File) => {
-    if (!croppingFor) return;
+  const handleCropComplete = async (file: File) => {
+    if (croppingFor) {
+      const formData = new FormData();
+      formData.append('student_id', croppingFor);
+      formData.append('file', file);
+      setUploadingId(croppingFor);
+      const result = await uploadStudentPhoto(formData);
+      if (result?.error) showToast('error', result.error);
+      else {
+        showToast('success', 'Photo uploaded successfully.');
+        router.refresh();
+      }
+      setUploadingId(null);
+      setCroppingFor(null);
+      setCropSrc('');
+      return;
+    }
+
+    if (founderCropping) {
+      const formData = new FormData();
+      formData.append('file', file);
+      setFounderCropping(false);
+      setFounderCropSrc('');
+      const result = await uploadFounderPhoto(formData);
+      if (result?.error) showToast('error', result.error);
+      else {
+        showToast('success', 'Founder photo uploaded successfully.');
+        router.refresh();
+      }
+      return;
+    }
+  };
+
+  const handleFounderFileSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) return showToast('error', 'Only images allowed');
     const url = URL.createObjectURL(file);
-    setPreviewUrls(prev => ({ ...prev, [croppingFor]: url }));
-    // Save cropped file in window object for upload
-    (window as any).croppedFiles = (window as any).croppedFiles || {};
-    (window as any).croppedFiles[croppingFor] = file;
-    setCropSrc('');
-    setCroppingFor(null);
-  };
-
-  const savePhoto = async (studentId: string) => {
-    const file = (window as any).croppedFiles?.[studentId];
-    if (!file) return showToast('error', 'No cropped image');
-    setUploadingId(studentId);
-    const formData = new FormData();
-    formData.append('student_id', studentId);
-    formData.append('file', file);
-    const result = await uploadStudentPhoto(formData);
-    if (result?.error) showToast('error', result.error);
-    else {
-      showToast('success', 'Photo uploaded successfully.');
-      if (previewUrls[studentId]) URL.revokeObjectURL(previewUrls[studentId]);
-      setPreviewUrls(prev => ({ ...prev, [studentId]: '' }));
-      delete (window as any).croppedFiles?.[studentId];
-      router.refresh();
-    }
-    setUploadingId(null);
-  };
-
-  const removePhoto = async (studentId: string) => {
-    const formData = new FormData();
-    formData.append('student_id', studentId);
-    const result = await removeStudentPhoto(formData);
-    if (result?.error) showToast('error', result.error);
-    else {
-      showToast('success', 'Photo removed.');
-      router.refresh();
-    }
-  };
-
-  const saveAttendance = async () => {
-    const entries = Object.entries(statusMap);
-    if (entries.length === 0) return showToast('error', 'No attendance changes to save.');
-    const records = entries.map(([student_id, status]) => ({ student_id, date: selectedDate, status }));
-    const result = await saveAttendanceBatch(records);
-    if (result?.error) showToast('error', result.error);
-    else {
-      const counts = { R: 0, M: 0, X: 0 };
-      records.forEach((r) => { counts[r.status as 'R'|'M'|'X']++; });
-      showToast('success', `Attendance saved: ${counts.R} R, ${counts.M} M, ${counts.X} X`);
-      setStatusMap({});
-      router.refresh();
-    }
+    setFounderCropSrc(url);
+    setFounderCropping(true);
   };
 
   const handleLogout = async () => {
@@ -210,12 +194,30 @@ export default function AdminClient({ mode, students, achievements, announcement
     setSelectedStudents(new Set());
   };
 
+  const saveAttendance = async () => {
+    const entries = Object.entries(statusMap);
+    if (entries.length === 0) return showToast('error', 'No attendance changes to save.');
+    const records = entries.map(([student_id, status]) => ({ student_id, date: selectedDate, status }));
+    const result = await saveAttendanceBatch(records);
+    if (result?.error) showToast('error', result.error);
+    else {
+      const counts = { R: 0, M: 0, X: 0 };
+      records.forEach((r) => { counts[r.status as 'R'|'M'|'X']++; });
+      showToast('success', `Attendance saved: ${counts.R} R, ${counts.M} M, ${counts.X} X`);
+      setStatusMap({});
+      router.refresh();
+    }
+  };
+
   return (
     <main style={{ minHeight: '100vh', background: '#fdf9f5' }}>
       <header style={{ background: 'linear-gradient(135deg, #1a472a, #2c6a56)', color: 'white', padding: '20px 0' }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Admin Dashboard</h1>
-          <button onClick={handleLogout} style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', fontWeight: 500 }}>Logout</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link href="/" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>View Website</Link>
+            <button onClick={handleLogout} style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', fontWeight: 500 }}>Logout</button>
+          </div>
         </div>
       </header>
 
@@ -241,10 +243,8 @@ export default function AdminClient({ mode, students, achievements, announcement
               {students.map((student) => (
                 <div key={student.id} style={{ padding: '16px', border: '1px solid #e8dfd6', borderRadius: '12px', background: '#fdf9f5' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    {previewUrls[student.id] ? (
-                      <img src={previewUrls[student.id]} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : student.photo_url ? (
-                      <img src={student.photo_url} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
+                    {student.photo_url ? (
+                      <img src={student.photo_url} alt={student.full_name} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#c9a94e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{student.full_name.charAt(0)}</div>
                     )}
@@ -260,16 +260,23 @@ export default function AdminClient({ mode, students, achievements, announcement
                         ref={(el) => { fileInputRefs.current[student.id] = el; }}
                         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(student.id, f); }}
                       />
-                      {previewUrls[student.id] ? (
-                        <>
-                          <button onClick={() => savePhoto(student.id)} disabled={uploadingId === student.id} className="btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}>{uploadingId === student.id ? 'Uploading...' : 'Save'}</button>
-                          <button onClick={() => { if (previewUrls[student.id]) URL.revokeObjectURL(previewUrls[student.id]); setPreviewUrls(prev => ({ ...prev, [student.id]: '' })); delete (window as any).croppedFiles?.[student.id]; }} className="btn-outline" style={{ padding: '6px 12px', fontSize: '12px' }}>Cancel</button>
-                        </>
-                      ) : (
-                        <button onClick={() => fileInputRefs.current[student.id]?.click()} className="btn-outline" style={{ padding: '6px 12px', fontSize: '12px' }}>{student.photo_url ? 'Change' : 'Upload'}</button>
-                      )}
-                      {student.photo_url && !previewUrls[student.id] && (
-                        <button onClick={() => removePhoto(student.id)} className="btn-danger" style={{ padding: '6px 12px', fontSize: '12px' }}>Remove</button>
+                      <button onClick={() => fileInputRefs.current[student.id]?.click()} className="btn-outline" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                        {student.photo_url ? 'Change' : 'Upload'}
+                      </button>
+                      {student.photo_url && (
+                        <button
+                          onClick={async () => {
+                            const formData = new FormData();
+                            formData.append('student_id', student.id);
+                            const result = await removeStudentPhoto(formData);
+                            if (result?.error) showToast('error', result.error);
+                            else { showToast('success', 'Photo removed.'); router.refresh(); }
+                          }}
+                          className="btn-danger"
+                          style={{ padding: '6px 12px', fontSize: '12px' }}
+                        >
+                          Remove
+                        </button>
                       )}
                     </div>
                   </div>
@@ -293,18 +300,21 @@ export default function AdminClient({ mode, students, achievements, announcement
           <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e8dfd6', padding: '24px' }}>
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '16px' }}>Record Attendance</h2>
             <input type="date" value={selectedDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSelectedDate(e.target.value)} style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6', marginBottom: '16px', width: '100%' }} />
+
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
               <button onClick={selectAll} className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>Select All</button>
               <button onClick={clearSelection} className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>Clear</button>
               <span>{selectedStudents.size} selected</span>
             </div>
+
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-              <button onClick={() => applyBatch('R')} className="btn-outline" style={{ borderColor:'#22c55e', color:'#166534' }}>Selected → R</button>
-              <button onClick={() => applyBatch('M')} className="btn-outline" style={{ borderColor:'#eab308', color:'#854d0e' }}>Selected → M</button>
-              <button onClick={() => applyBatch('X')} className="btn-outline" style={{ borderColor:'#94a3b8', color:'#475569' }}>Selected → X</button>
+              <button onClick={() => applyBatch('R')} className="btn-outline" style={{ borderColor: '#22c55e', color: '#166534' }}>Selected → R</button>
+              <button onClick={() => applyBatch('M')} className="btn-outline" style={{ borderColor: '#eab308', color: '#854d0e' }}>Selected → M</button>
+              <button onClick={() => applyBatch('X')} className="btn-outline" style={{ borderColor: '#94a3b8', color: '#475569' }}>Selected → X</button>
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {students.filter(s => s.is_active && s.joining_date !== null).map(student => {
+              {students.filter((s) => s.is_active && s.joining_date !== null).map((student) => {
                 const current = statusMap[student.id] || 'X';
                 return (
                   <div key={student.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f5efe8' }}>
@@ -317,6 +327,7 @@ export default function AdminClient({ mode, students, achievements, announcement
                 );
               })}
             </div>
+
             <button onClick={saveAttendance} className="btn-primary" style={{ marginTop: '20px', width: '100%' }}>Save Attendance</button>
           </div>
         )}
@@ -326,7 +337,7 @@ export default function AdminClient({ mode, students, achievements, announcement
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '16px' }}>Add Achievement</h2>
             <form action={addAchievement} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <select name="student_id" required style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6' }}>
-                {students.map(s => <option key={s.id} value={s.id}>{s.id} — {s.full_name}</option>)}
+                {students.map((s) => <option key={s.id} value={s.id}>{s.id} — {s.full_name}</option>)}
               </select>
               <input name="title" placeholder="Achievement Title" required style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6' }} />
               <input name="category" placeholder="Category" style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6' }} />
@@ -334,8 +345,9 @@ export default function AdminClient({ mode, students, achievements, announcement
               <input name="description" placeholder="Description" style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6' }} />
               <button type="submit" className="btn-primary">Add Achievement</button>
             </form>
+
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginTop: '28px', marginBottom: '16px' }}>Existing Achievements</h2>
-            {achievements.map(a => (
+            {achievements.map((a) => (
               <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f5efe8' }}>
                 <div>
                   <p style={{ fontWeight: 600 }}>{a.title}</p>
@@ -359,17 +371,49 @@ export default function AdminClient({ mode, students, achievements, announcement
               <textarea name="schedule" rows={5} placeholder="Weekly schedule" style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6' }} />
               <button type="submit" className="btn-primary">Post Announcement</button>
             </form>
+
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginTop: '28px', marginBottom: '16px' }}>Founder Photo</h2>
-            <form action={uploadFounderPhoto}>
-              <label className="btn-outline" style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                Upload Founder Photo
-                <input type="file" name="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) e.target.form?.requestSubmit(); }} />
-              </label>
-            </form>
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              ref={founderFileInputRef}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFounderFileSelect(f);
+              }}
+            />
+            <button onClick={() => founderFileInputRef.current?.click()} className="btn-outline">
+              Upload Founder Photo
+            </button>
           </div>
         )}
       </div>
-      {croppingFor && <ImageCropper src={cropSrc} onCancel={() => { setCroppingFor(null); setCropSrc(''); URL.revokeObjectURL(cropSrc); }} onCrop={handleCropComplete} />}
+
+      {croppingFor && (
+        <ImageCropper
+          src={cropSrc}
+          onCancel={() => {
+            setCroppingFor(null);
+            setCropSrc('');
+            URL.revokeObjectURL(cropSrc);
+          }}
+          onCrop={handleCropComplete}
+        />
+      )}
+
+      {founderCropping && (
+        <ImageCropper
+          src={founderCropSrc}
+          onCancel={() => {
+            setFounderCropping(false);
+            setFounderCropSrc('');
+            URL.revokeObjectURL(founderCropSrc);
+          }}
+          onCrop={handleCropComplete}
+        />
+      )}
+
       {toast && <div className={`toast ${toast.type === 'error' ? 'error' : ''}`}>{toast.message}</div>}
     </main>
   );
