@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
-import { SCHOOL } from '../../lib';
+import { SCHOOL, getRecitationDatesForWeek } from '../../lib';
 import type { Student, Achievement } from '../../lib';
 import {
   addStudent,
@@ -27,6 +27,15 @@ interface Props {
   announcement: any;
 }
 
+const SCHOOL_START_WEEK_ONE_MONDAY = '2026-07-13';
+
+function getCurrentWeekNumber(): number {
+  const start = new Date(SCHOOL_START_WEEK_ONE_MONDAY + 'T00:00:00Z');
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
+
 export default function AdminClient({ mode, students, achievements, announcement }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<'students' | 'attendance' | 'achievements' | 'announcement'>('students');
@@ -35,7 +44,8 @@ export default function AdminClient({ mode, students, achievements, announcement
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loadingLogin, setLoadingLogin] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedWeek, setSelectedWeek] = useState<number>(getCurrentWeekNumber());
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [croppingFor, setCroppingFor] = useState<string | null>(null);
@@ -46,12 +56,21 @@ export default function AdminClient({ mode, students, achievements, announcement
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const founderFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const currentWeek = getCurrentWeekNumber();
+  const weekDates = getRecitationDatesForWeek(selectedWeek);
+  const selectedDate = weekDates[selectedDayIndex] || '';
+
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  useEffect(() => {
+    setStatusMap({});
+    setSelectedStudents(new Set());
+  }, [selectedWeek, selectedDayIndex]);
 
   if (mode === 'login') {
     const supabase = createBrowserClient(
@@ -178,7 +197,7 @@ export default function AdminClient({ mode, students, achievements, announcement
   };
 
   const selectAll = () => {
-    const allIds = students.filter((s) => s.is_active && s.joining_date !== null).map((s) => s.id);
+    const allIds = students.filter((s) => s.is_active).map((s) => s.id);
     setSelectedStudents(new Set(allIds));
   };
 
@@ -205,6 +224,13 @@ export default function AdminClient({ mode, students, achievements, announcement
       router.refresh();
     }
   };
+
+  const weekOptions = Array.from({ length: currentWeek }, (_, i) => i + 1);
+  const dayOptions = weekDates.map((date, index) => ({
+    date,
+    label: new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }),
+    index,
+  }));
 
   return (
     <main style={{ minHeight: '100vh', background: '#fdf9f5' }}>
@@ -282,19 +308,30 @@ export default function AdminClient({ mode, students, achievements, announcement
         {tab === 'attendance' && (
           <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e8dfd6', padding: '24px' }}>
             <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '16px' }}>Record Attendance</h2>
-            <input type="date" value={selectedDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSelectedDate(e.target.value)} style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid #e8dfd6', marginBottom: '16px', width: '100%' }} />
+
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <select value={selectedWeek} onChange={(e) => setSelectedWeek(parseInt(e.target.value))} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid #e8dfd6', fontSize: '14px', background: '#fdf9f5' }}>
+                {weekOptions.map((w) => <option key={w} value={w}>Week {w}</option>)}
+              </select>
+              <select value={selectedDayIndex} onChange={(e) => setSelectedDayIndex(parseInt(e.target.value))} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid #e8dfd6', fontSize: '14px', background: '#fdf9f5' }}>
+                {dayOptions.map((d) => <option key={d.index} value={d.index}>{d.label}</option>)}
+              </select>
+            </div>
+
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
               <button onClick={selectAll} className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>Select All</button>
               <button onClick={clearSelection} className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>Clear</button>
               <span>{selectedStudents.size} selected</span>
             </div>
+
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
               <button onClick={() => applyBatch('R')} className="btn-outline" style={{ borderColor: '#22c55e', color: '#166534' }}>Selected → R</button>
               <button onClick={() => applyBatch('M')} className="btn-outline" style={{ borderColor: '#eab308', color: '#854d0e' }}>Selected → M</button>
               <button onClick={() => applyBatch('X')} className="btn-outline" style={{ borderColor: '#94a3b8', color: '#475569' }}>Selected → X</button>
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {students.filter((s) => s.is_active && s.joining_date !== null).map((student) => {
+              {students.filter((s) => s.is_active).map((student) => {
                 const current = statusMap[student.id] || 'X';
                 return (
                   <div key={student.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f5efe8' }}>
@@ -307,6 +344,7 @@ export default function AdminClient({ mode, students, achievements, announcement
                 );
               })}
             </div>
+
             <button onClick={saveAttendance} className="btn-primary" style={{ marginTop: '20px', width: '100%' }}>Save Attendance</button>
           </div>
         )}
