@@ -1,6 +1,3 @@
-'use client';
-
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   supabase,
@@ -10,44 +7,29 @@ import {
 } from '../../lib';
 import type { Student, AttendanceRecord } from '../../lib';
 
-export default function ReportPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [weeks, setWeeks] = useState<number[]>([]);
+export const dynamic = 'force-dynamic';
 
-  useEffect(() => {
-    async function load() {
-      const [studentsRes, attendanceRes] = await Promise.all([
-        supabase.from('students').select('*').eq('is_active', true).order('id'),
-        supabase.from('attendance_records').select('*').order('date'),
-      ]);
+function getCurrentWeekNumber(): number {
+  const start = new Date('2026-07-13T00:00:00Z');
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
 
-      setStudents(studentsRes.data || []);
-      setAttendance(attendanceRes.data || []);
+export default async function ReportPage() {
+  const [studentsRes, attendanceRes] = await Promise.all([
+    supabase.from('students').select('*').eq('is_active', true).order('id'),
+    supabase.from('attendance_records').select('*').order('date'),
+  ]);
 
-      const now = new Date();
-      const todayISO = now.toISOString().slice(0, 10);
-      const start = new Date('2026-07-13T00:00:00Z');
-      const diffDays = Math.floor((Date.now() - start.getTime()) / 86400000);
-      const currentWeek = Math.max(1, Math.floor(diffDays / 7) + 1);
+  const students: Student[] = studentsRes.data || [];
+  const attendance: AttendanceRecord[] = attendanceRes.data || [];
 
-      const weekList: number[] = [];
-      for (let w = 1; w <= currentWeek; w++) {
-        weekList.push(w);
-      }
-      setWeeks(weekList);
-      setLoading(false);
-    }
-    load();
-  }, []);
+  const currentWeek = getCurrentWeekNumber();
+  const weeks: number[] = [];
 
-  if (loading) {
-    return (
-      <main style={{ background: '#fdf9f5', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#6b5a4a', fontSize: '15px' }}>Loading report...</p>
-      </main>
-    );
+  for (let w = 1; w <= currentWeek; w++) {
+    weeks.push(w);
   }
 
   return (
@@ -55,12 +37,17 @@ export default function ReportPage() {
       <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <Link href="/" className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>← Back to Home</Link>
-          <button
-            onClick={() => window.print()}
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              window.print();
+            }}
             className="btn-primary no-print"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 24px', borderRadius: '999px', fontWeight: 700, fontSize: '14px' }}
           >
             Print / Save as PDF
-          </button>
+          </a>
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
