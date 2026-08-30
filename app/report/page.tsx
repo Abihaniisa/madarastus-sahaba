@@ -38,11 +38,7 @@ export default async function ReportPage() {
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <Link href="/" className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>← Back to Home</Link>
           <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              window.print();
-            }}
+            href="javascript:window.print()"
             className="btn-primary no-print"
             style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 24px', borderRadius: '999px', fontWeight: 700, fontSize: '14px' }}
           >
