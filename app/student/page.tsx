@@ -6,8 +6,8 @@ import {
   calculateStats,
   getWeekly,
   generateEligibleSessions,
-} from '../../lib';
-import type { Student, AttendanceRecord, Achievement } from '../../lib';
+} from '@/lib';
+import type { Student, AttendanceRecord, Achievement } from '@/lib';
 import AvatarViewer from './avatar-viewer';
 
 export const dynamic = 'force-dynamic';
@@ -58,7 +58,6 @@ export default async function StudentPage({
     <main className="container" style={{ padding: '20px 16px 40px' }}>
       <Link href="/" className="btn-outline" style={{ padding: '8px 16px', fontSize: '13px' }}>← Back to Students</Link>
 
-      {/* REPORT CARD */}
       <div className="certificate-frame" style={{ marginTop: '16px' }}>
         <span className="corner corner-tl" /><span className="corner corner-tr" /><span className="corner corner-bl" /><span className="corner corner-br" />
 
@@ -110,7 +109,6 @@ export default async function StudentPage({
         </div>
       </div>
 
-      {/* DETAILED BREAKDOWN */}
       <div style={{ marginTop: '24px', background: 'white', border: '1px solid #e8dfd6', borderRadius: '16px', padding: '20px' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>Weekly Breakdown</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
