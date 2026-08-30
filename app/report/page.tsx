@@ -4,8 +4,8 @@ import {
   SCHOOL,
   getRecitationDatesForWeek,
   getWeeklyStatsForWeek,
-} from '../../lib';
-import type { Student, AttendanceRecord } from '../../lib';
+} from '@/lib';
+import type { Student, AttendanceRecord } from '@/lib';
 
 export const dynamic = 'force-dynamic';
 
