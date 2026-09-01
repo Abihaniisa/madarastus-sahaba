@@ -121,10 +121,10 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                       padding: '14px 16px',
                       borderBottom: '1px solid #f5efe8',
                       cursor: 'pointer',
-                      flexWrap: 'wrap',
                     }}
                     onClick={() => (window.location.href = `/student?id=${student.id}`)}
                   >
+                    {/* Bell/Pin */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -148,6 +148,8 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                         <path d="M5 17h14l-1.5-4.5V7a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v5.5L5 17Z" />
                       </svg>
                     </button>
+
+                    {/* Avatar */}
                     {student.photo_url ? (
                       <img
                         src={student.photo_url}
@@ -173,7 +175,9 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                         {firstLetter}
                       </div>
                     )}
-                    <div style={{ flex: '1 1 auto', minWidth: '140px', maxWidth: '100%' }}>
+
+                    {/* Identity */}
+                    <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                       <p
                         style={{
                           fontWeight: 600,
@@ -191,14 +195,28 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                         Reg. No: {student.id}
                       </p>
                     </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontWeight: 700, color: '#1a472a', fontSize: '15px', lineHeight: 1.3 }}>
+
+                    {/* Divider */}
+                    <div
+                      style={{
+                        width: '1px',
+                        height: '36px',
+                        background: '#e8dfd6',
+                        flexShrink: 0,
+                      }}
+                    />
+
+                    {/* Performance */}
+                    <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '92px' }}>
+                      <p style={{ fontWeight: 700, color: '#1a472a', fontSize: '15px', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
                         On-Time {student.stats?.attendance ?? '—'}%
                       </p>
-                      <p style={{ fontWeight: 700, color: '#c9a94e', fontSize: '15px', lineHeight: 1.3, marginTop: '2px' }}>
+                      <p style={{ fontWeight: 700, color: '#c9a94e', fontSize: '15px', lineHeight: 1.3, marginTop: '2px', whiteSpace: 'nowrap' }}>
                         Completion {student.stats?.completion ?? '—'}%
                       </p>
                     </div>
+
+                    {/* Chevron */}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a6947e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
