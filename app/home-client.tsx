@@ -121,6 +121,7 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                       padding: '14px 16px',
                       borderBottom: '1px solid #f5efe8',
                       cursor: 'pointer',
+                      flexWrap: 'wrap',
                     }}
                     onClick={() => (window.location.href = `/student?id=${student.id}`)}
                   >
@@ -172,8 +173,18 @@ export default function HomeClient({ students, founderPhotoUrl }: Props) {
                         {firstLetter}
                       </div>
                     )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                    <div style={{ flex: '1 1 auto', minWidth: '140px', maxWidth: '100%' }}>
+                      <p
+                        style={{
+                          fontWeight: 600,
+                          color: '#1e293b',
+                          fontSize: '14px',
+                          lineHeight: 1.3,
+                          wordBreak: 'normal',
+                          whiteSpace: 'normal',
+                          overflowWrap: 'break-word',
+                        }}
+                      >
                         {student.full_name}
                       </p>
                       <p style={{ fontSize: '11px', color: '#a6947e', marginTop: '2px' }}>
