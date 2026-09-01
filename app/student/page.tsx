@@ -87,7 +87,7 @@ export default async function StudentPage({
         <div style={{ marginTop: '16px', borderTop: '2px solid #1a472a', paddingTop: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '120px', textAlign: 'center', background: '#fdf9f5', borderRadius: '10px', padding: '12px' }}>
             <p style={{ fontSize: '24px', fontWeight: 700, color: '#1a472a' }}>{stats.attendance}%</p>
-            <p style={{ fontSize: '11px', color: '#6b5a4a', fontWeight: 600 }}>Recitation Rate</p>
+            <p style={{ fontSize: '11px', color: '#6b5a4a', fontWeight: 600 }}>On-Time Rate</p>
           </div>
           <div style={{ flex: 1, minWidth: '120px', textAlign: 'center', background: '#fdf9f5', borderRadius: '10px', padding: '12px' }}>
             <p style={{ fontSize: '24px', fontWeight: 700, color: '#c9a94e' }}>{stats.completion}%</p>
